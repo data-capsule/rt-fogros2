@@ -30,10 +30,11 @@ def send_request(
     # print(f"topic {topic.name} with operation {api_op} request sent with response {response}")
 
 class SGC_StateMachine: 
-    def __init__(self, state_name, topic_dict, param_dict):
+    def __init__(self, state_name, topic_dict, param_dict, service_dict):
         self.state_name = state_name
         self.topics = topic_dict
         self.params = param_dict
+        self.services = service_dict
 
     def __repr__(self):
         return str(self.__dict__)
@@ -72,6 +73,7 @@ class SGC_Swarm:
             self.logger.info(f"The config file is \n {pprint.pformat(config)}")
         self._load_addresses(config)
         self._load_identifiers(config)
+        self._load_services(config)
         self._load_topics(config)
         self._load_state_machine(config)
         
@@ -139,8 +141,14 @@ class SGC_Swarm:
                 self.instance_identifer = config["identifiers"]["whoami"]
 
     def _load_topics(self, config):
+        if "topics" not in config:
+            return
         for topic in config["topics"]:
             self.topic_dict[topic["topic_name"]] = topic["topic_type"]
+
+    def _load_services(self, config):
+        for service in config["services"]:
+            self.topic_dict[service["service_name"]] = service["service_type"]
 
     def _load_state_machine(self, config):
         for state_name in config["state_machine"]:
@@ -148,9 +156,10 @@ class SGC_Swarm:
             if state_description:
                 topics =  state_description["topics"] if "topics" in state_description else None 
                 params =  state_description["params"] if "params" in state_description else None 
-                self.state_dict[state_name] = SGC_StateMachine(state_name, topics, params)
+                services = state_description["services"] if "services" in state_description else None
+                self.state_dict[state_name] = SGC_StateMachine(state_name, topics, params, services)
             else:
-                self.state_dict[state_name] = SGC_StateMachine(state_name, None, None)
+                self.state_dict[state_name] = SGC_StateMachine(state_name, None, None, None)
         self.logger.info(str(self.state_dict))
 
     def get_assignment_from_yaml(self, yaml_path):
