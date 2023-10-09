@@ -10,7 +10,7 @@ from rcl_interfaces.msg import SetParametersResult
 from sgc_msgs.srv import SgcAssignment
 from sgc_msgs.msg import AssignmentUpdate
 
-def send_request(
+def send_topic_request(
     api_op, 
     topic_action,
     topic_name,
@@ -28,6 +28,27 @@ def send_request(
     # Create a new resource
     response = requests.post(uri, json = ros_topic)
     # print(f"topic {topic.name} with operation {api_op} request sent with response {response}")
+
+
+def send_service_request(
+    api_op, 
+    topic_action,
+    topic_name,
+    topic_type,
+    machine_address, 
+):
+    ros_topic = {
+        "api_op": api_op,
+        "ros_op": topic_action,
+        "crypto": "test_cert",
+        "topic_name": topic_name,
+        "topic_type": topic_type,
+    }
+    uri = f"http://{machine_address}/service"
+    # Create a new resource
+    response = requests.post(uri, json = ros_topic)
+    # print(f"topic {topic.name} with operation {api_op} request sent with response {response}")
+
 
 class SGC_StateMachine: 
     def __init__(self, state_name, topic_dict, param_dict, service_dict):
@@ -54,6 +75,7 @@ class SGC_Swarm:
 
         # topic dictionary: map topic to topic type 
         self.topic_dict = dict()
+        self.service_dict = dict()
 
         # states: map state_name to SGC_StateMachine
         self.state_dict = dict()
@@ -62,6 +84,7 @@ class SGC_Swarm:
         self.assignment_dict = dict()
 
         self._paused_topics = []
+        self._paused_services = []
 
         self.logger = logger
         
@@ -96,22 +119,39 @@ class SGC_Swarm:
                         topic_name = list(topic_to_action_pair.keys())[0] # because it only has one element for sure
                         topic_type = self.topic_dict[topic_name]
                         topic_action = topic_to_action_pair[topic_name]
-                        send_request("del", topic_action, topic_name, topic_type, self.sgc_address)
+                        send_topic_request("del", topic_action, topic_name, topic_type, self.sgc_address)
                         self._paused_topics.append(topic_name)
                             
                 # add in new topics 
-                for topic_to_action_pair in self.state_dict[current_state].topics:
-                    topic_name = list(topic_to_action_pair.keys())[0] # because it only has one element for sure
-                    topic_type = self.topic_dict[topic_name]
-                    topic_action = topic_to_action_pair[topic_name]
-                    if topic_name in self._paused_topics:
-                        # if the topic is paused, we need to resume it 
-                        self.logger.warn(f"resuming topic {topic_name} this prevents setting up a new connection")
-                        send_request("resume", topic_action, topic_name, topic_type, self.sgc_address)
-                        self._paused_topics.remove(topic_name)
-                    else:
-                        self.logger.warn(f"adding topic {topic_name} to SGC router")
-                        send_request("add", topic_action, topic_name, topic_type, self.sgc_address)
+                if self.state_dict[current_state].topics:
+                    for topic_to_action_pair in self.state_dict[current_state].topics:
+                        topic_name = list(topic_to_action_pair.keys())[0] # because it only has one element for sure
+                        topic_type = self.topic_dict[topic_name]
+                        topic_action = topic_to_action_pair[topic_name]
+                        if topic_name in self._paused_topics:
+                            # if the topic is paused, we need to resume it 
+                            self.logger.warn(f"resuming topic {topic_name} this prevents setting up a new connection")
+                            send_topic_request("resume", topic_action, topic_name, topic_type, self.sgc_address)
+                            self._paused_topics.remove(topic_name)
+                        else:
+                            self.logger.warn(f"adding topic {topic_name} to SGC router")
+                            send_topic_request("add", topic_action, topic_name, topic_type, self.sgc_address)
+
+                # add in new services 
+                if self.state_dict[current_state].services:
+                    for service_to_action_pair in self.state_dict[current_state].services:
+                        service_name = list(service_to_action_pair.keys())[0] # because it only has one element for sure
+                        service_type = self.service_dict[service_name]
+                        service_action = service_to_action_pair[service_name]
+                        if service_name in self._paused_services:
+                            # if the topic is paused, we need to resume it 
+                            self.logger.warn(f"resuming service {service_name} this prevents setting up a new connection")
+                            send_service_request("resume", service_action, service_name, service_type, self.sgc_address)
+                            self._paused_services.remove(service_name)
+                        else:
+                            self.logger.warn(f"adding service {service_name} to SGC router")
+                            send_service_request("add", service_action, service_name, service_type, self.sgc_address)
+
                 self.assignment_dict[machine] = new_assignment_dict[machine]
             else:
                 # only udpate the assignment dict, do not do any parameter change
@@ -148,7 +188,7 @@ class SGC_Swarm:
 
     def _load_services(self, config):
         for service in config["services"]:
-            self.topic_dict[service["service_name"]] = service["service_type"]
+            self.service_dict[service["service_name"]] = service["service_type"]
 
     def _load_state_machine(self, config):
         for state_name in config["state_machine"]:
@@ -337,11 +377,11 @@ class SGC_Router_Node(rclpy.node.Node):
                 if "Subscription count: 0" in output:
                     self.get_logger().info(f"publish {topic_name} as a remote publisher")
                     topic_action = "pub"
-                    send_request("add", topic_action, topic_name, topic_type, self.sgc_router_api_addr)
+                    send_topic_request("add", topic_action, topic_name, topic_type, self.sgc_router_api_addr)
                 elif "Publisher count: 0" in output:
                     self.get_logger().info(f"publish {topic_name} as a remote subscriber")
                     topic_action = "sub"
-                    send_request("add", topic_action, topic_name, topic_type, self.sgc_router_api_addr)
+                    send_topic_request("add", topic_action, topic_name, topic_type, self.sgc_router_api_addr)
                 else:
                     self.get_logger().info(f"cannot determine {topic_name} direction")
                 self.discovered_topics.append(topic_name)
