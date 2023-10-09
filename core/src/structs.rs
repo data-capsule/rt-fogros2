@@ -223,6 +223,23 @@ pub fn get_gdp_name_from_topic(topic_name: &str, topic_type: &str, cert: &[u8]) 
     // unsafe { transmute::<[u8; 4], u32>(bytes) }
 }
 
+pub fn generate_gdp_name_from_string(input_str: &str) -> GDPName {
+    // create a Sha256 object
+    let mut hasher = Sha256::new();
+
+    // hash with name, type and certificate
+    hasher.update(input_str);
+    let result = hasher.finalize();
+    // Get the first 4 bytes of the digest
+    let mut bytes = [0u8; 4];
+    bytes.copy_from_slice(&result[..4]);
+
+    GDPName(bytes)
+    // // Convert the bytes to a u32
+    // unsafe { transmute::<[u8; 4], u32>(bytes) }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct GDPStatus {
     pub sink: UnboundedSender<GDPPacket>,

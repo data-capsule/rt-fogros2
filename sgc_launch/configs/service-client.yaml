@@ -1,0 +1,18 @@
+identifiers: 
+  task: test_cert 
+  
+services:
+  - service_name: /add_three_ints
+    service_type: bench_msgs/srv/AddThreeInts
+
+state_machine: 
+  client: 
+    services:
+      - /add_three_ints: client 
+  server: 
+    services:
+      - /add_three_ints: service 
+
+assignment:
+  machine_client: client
+  machine_server: server
