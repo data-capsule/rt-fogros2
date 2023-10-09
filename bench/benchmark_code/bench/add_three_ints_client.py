@@ -73,7 +73,7 @@ def main(args=None):
         add_three_ints_client.get_logger().info(f"I am {host_name} ond {host_ip}. Sending request {a}, {b}, {c}")
         response = add_three_ints_client.send_request(a,b,c)
         add_three_ints_client.get_logger().info(
-            f'I am {host_name} ond {host_ip}. Result of add_two_ints: {a} + {b} + {c} = {response.sum}')
+            f'Received from {response.server_name}. Result of add_two_ints: {a} + {b} + {c} = {response.sum}')
         
         a += 1
         b += 1

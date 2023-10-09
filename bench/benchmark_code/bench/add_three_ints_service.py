@@ -32,6 +32,7 @@
 # MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
 
 import socket
+import random
 
 import rclpy
 from rclpy.node import Node
@@ -41,17 +42,18 @@ from bench_msgs.srv import AddThreeInts
 class AddThreeIntsServiceNode(Node):
     def __init__(self):
         super().__init__("add_two_ints")
-        self.host_name = socket.gethostname()
-        self.host_ip = socket.gethostbyname(self.host_name)
+        # generate random name
+        self.host_name = socket.gethostname() + str(random.randint(0, 1000))
 
-        self.get_logger().info(f'I am {self.host_name} at {self.host_ip}. Starting service /add_three_ints.')
+        self.get_logger().info(f'I am {self.host_name}. Starting service /add_three_ints.')
 
         self.service = self.create_service(AddThreeInts, "add_three_ints", self.add_three_ints_callback)
 
 
     def add_three_ints_callback(self, request, response):
         response.sum = request.a + request.b + request.c
-        self.get_logger().info(f'I am {self.host_name} at {self.host_ip}. Incoming request: a: {request.a}, b: {request.b}, c: {request.c}. Sending: {response.sum}')
+        response.server_name = self.host_name
+        self.get_logger().info(f'I am {self.host_name} . Incoming request: a: {request.a}, b: {request.b}, c: {request.c}. Sending: {response.sum}')
 
         return response
 
