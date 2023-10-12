@@ -171,7 +171,9 @@ pub async fn ros_topic_remote_service_provider(
                                 Some(req) = service.next() => {
                                     // send it to webrtc 
                                     //packet guid is the hash of the request id as string 
-                                    let packet_guid = generate_gdp_name_from_string(&stringify!(req.request_id)); 
+                                    let guid = format!("{:?}", req.request_id);
+                                    info!("received a ROS request {:?}", guid);
+                                    let packet_guid = generate_gdp_name_from_string(&guid); 
                                     let packet = construct_gdp_forward_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&req.message).unwrap(), packet_guid );
                                     info!("sending to webrtc {:?}", packet);
                                     request_tx.send(packet).expect("send for ros subscriber failure");
