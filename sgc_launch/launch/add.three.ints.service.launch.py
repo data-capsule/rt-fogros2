@@ -23,7 +23,7 @@ def generate_launch_description():
             # or use the `config_path` optional parameter
             {"config_file_name": "service-client.yaml"}, 
             {"whoami": "machine_server"},
-            {"release_mode": True}
+            {"release_mode": False}
         ]
     )
     ld.add_action(sgc_router)

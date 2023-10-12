@@ -14,6 +14,7 @@ pub enum FibChangeAction {
     PAUSEADD, // adding the entry to FIB, but keeps it paused
     RESUME, // resume a paused topic
     DELETE, // deleting a local topic interface and all its connections 
+    RESPONSE,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
@@ -33,8 +34,8 @@ pub struct FibStateChange {
 
 #[derive(Debug)]
 pub struct FIBState {
-    state: TopicStateInFIB,
-    receivers: Vec<UnboundedSender<GDPPacket>>,
+    pub state: TopicStateInFIB,
+    pub receivers: Vec<UnboundedSender<GDPPacket>>,
 }
 
 
@@ -135,6 +136,9 @@ pub async fn connection_fib_handler(
                             }
                         };
                     },
+                    FibChangeAction::RESPONSE => {
+                        info!("response received {:?}", update);
+                    }
                 }
             }
         }

@@ -5,6 +5,7 @@ use crate::connection_fib::connection_fib_handler;
 use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
 
 use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_forward_with_guid};
+use crate::service_request_manager::{service_connection_fib_handler};
 use crate::structs::{
     gdp_name_to_string, generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GdpAction,
     Packet, generate_gdp_name_from_string,
@@ -67,10 +68,11 @@ pub async fn ros_topic_remote_service_provider(
 ) {
     let mut join_handles = vec![];
 
-    let (fib_tx, fib_rx) = mpsc::unbounded_channel();
+    let (request_tx, request_rx) = mpsc::unbounded_channel();
+    let (response_tx, response_rx) = mpsc::unbounded_channel();
     let (channel_tx, channel_rx) = mpsc::unbounded_channel();
     let fib_handle = tokio::spawn(async move {
-        connection_fib_handler(fib_rx, channel_rx).await;
+        service_connection_fib_handler(request_rx, response_rx, channel_rx).await;
     });
     join_handles.push(fib_handle);
 
@@ -99,7 +101,7 @@ pub async fn ros_topic_remote_service_provider(
                 let topic_type = request.topic_type;
                 let action = request.action;
                 let certificate = request.certificate;
-                let fib_tx = fib_tx.clone();
+                let request_tx = request_tx.clone();
                 let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                     &topic_name,
                     &topic_type,
@@ -134,8 +136,15 @@ pub async fn ros_topic_remote_service_provider(
                 };
                 let _ = channel_tx.send(channel_update_msg);
 
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::RESPONSE,
+                    topic_gdp_name: topic_gdp_name,
+                    forward_destination: Some(ros_tx),
+                };
+                let _ = channel_tx.send(channel_update_msg);
 
-                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, ros_tx.clone(), rtc_rx));
+
+                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, response_tx.clone(), rtc_rx));
                 join_handles.push(rtc_handle);
 
                 if existing_topics.contains(&topic_gdp_name) {
@@ -165,7 +174,7 @@ pub async fn ros_topic_remote_service_provider(
                                     let packet_guid = generate_gdp_name_from_string(&stringify!(req.request_id)); 
                                     let packet = construct_gdp_forward_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&req.message).unwrap(), packet_guid );
                                     info!("sending to webrtc {:?}", packet);
-                                    fib_tx.send(packet).expect("send for ros subscriber failure");
+                                    request_tx.send(packet).expect("send for ros subscriber failure");
                                     tokio::select! {
                                         Some(packet) = ros_rx.recv() => {
                                             // send it to ros
@@ -175,6 +184,12 @@ pub async fn ros_topic_remote_service_provider(
                                             let mut respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             let respond_msg_in_json = serde_json::from_str(str::from_utf8(&packet.payload.unwrap()).unwrap()).expect("json parsing failure");
                                             respond_msg.from_json(respond_msg_in_json).unwrap();
+                                            req.respond(respond_msg).expect("could not send service response");
+                                        }, 
+                                        // timeout after 1 second 
+                                        _ = tokio::time::sleep(Duration::from_millis(1000)) => {
+                                            error!("timeout for ros_rx");
+                                            let mut respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             req.respond(respond_msg).expect("could not send service response");
                                         }
                                     }

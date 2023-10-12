@@ -259,7 +259,7 @@ pub async fn webrtc_reader_and_writer(
                         let packet = construct_gdp_forward_from_bytes(deserialized.destination, thread_name, payload);
                         match ros_tx.send(packet) {
                             Ok(_) => {},
-                            Err(_) => {error!("webrtc thread to ROS thread send failure");},
+                            Err(_) => {warn!("request is being handled by another connection");},
                         }
 
                         // proc_gdp_packet(packet,  // packet
