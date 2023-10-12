@@ -103,6 +103,7 @@ pub struct GDPPacket {
 pub struct GDPHeaderInTransit {
     pub action: GdpAction,
     pub destination: GDPName,
+    pub guid: GDPName,
     pub length: usize,
 }
 
@@ -126,12 +127,14 @@ impl Packet for GDPPacket {
             Some(payload) => GDPHeaderInTransit {
                 action: self.action,
                 destination: self.gdpname,
+                guid: self.guid.unwrap(),
                 length: payload.len() + name_record_length,
             },
             None => {
                 GDPHeaderInTransit {
                     action: self.action,
                     destination: self.gdpname,
+                    guid: self.guid.unwrap(),
                     length: name_record_length, // doesn't have any payload
                 }
             }

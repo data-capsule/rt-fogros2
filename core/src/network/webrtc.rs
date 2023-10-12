@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::pipeline::construct_gdp_forward_from_bytes;
+use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_forward_with_guid};
 use crate::structs::GDPHeaderInTransit;
 use crate::structs::{generate_random_gdp_name, GDPName};
 use crate::structs::{GDPPacket, GdpAction, Packet};
@@ -35,6 +35,7 @@ pub fn parse_header_payload_pairs(
     let default_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
         action: GdpAction::Noop,
         destination: GDPName([0u8, 0, 0, 0]),
+        guid: GDPName([0u8, 0, 0, 0]),
         length: 0, // doesn't have any payload
     };
     if buffer.len() == 0 {
@@ -191,6 +192,7 @@ pub async fn webrtc_reader_and_writer(
     let mut remaining_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
         action: GdpAction::Noop,
         destination: GDPName([0u8, 0, 0, 0]),
+        guid: GDPName([0u8, 0, 0, 0]),
         length: 0, // doesn't have any payload
     };
     let mut remaining_gdp_payload: Vec<u8> = vec![];
@@ -256,7 +258,8 @@ pub async fn webrtc_reader_and_writer(
                     info!("the total received payload with size {:} with gdp header length {}",  payload.len(), header.length);
 
                     if deserialized.action == GdpAction::Forward {
-                        let packet = construct_gdp_forward_from_bytes(deserialized.destination, thread_name, payload);
+                        // let packet = construct_gdp_forward_from_bytes(deserialized.destination, thread_name, payload);
+                        let packet = construct_gdp_forward_with_guid(deserialized.destination, thread_name, payload, deserialized.guid);
                         match ros_tx.send(packet) {
                             Ok(_) => {},
                             Err(_) => {warn!("request is being handled by another connection");},

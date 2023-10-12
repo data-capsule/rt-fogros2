@@ -306,7 +306,7 @@ pub async fn ros_topic_local_service_caller(
                         loop{
                             let pkt_to_forward = ros_rx.recv().await.expect("ros_topic_local_service_caller crashed!!");
                             if pkt_to_forward.action == GdpAction::Forward {
-                                info!("new payload to publish");
+                                info!("new payload to publish {:?}", pkt_to_forward.guid);
                                 if pkt_to_forward.gdpname == topic_gdp_name {
                                     let payload = pkt_to_forward.get_byte_payload().unwrap();
                                     let ros_msg = serde_json::from_str(str::from_utf8(payload).unwrap()).expect("json parsing failure");
@@ -314,7 +314,7 @@ pub async fn ros_topic_local_service_caller(
                                     let mut resp = untyped_client.request(ros_msg).expect("service call failure").await;
                                     info!("the response is {:?}", resp);
                                     //send back the response to the rtc
-                                    let packet_guid = generate_gdp_name_from_string(&stringify!(resp.request_id)); 
+                                    let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id)); 
                                     let packet = construct_gdp_forward_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&resp.unwrap().unwrap()).unwrap(), packet_guid);
                                     rtc_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{

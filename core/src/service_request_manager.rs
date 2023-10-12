@@ -26,6 +26,7 @@ pub async fn service_connection_fib_handler(
         tokio::select! {
             Some(pkt) = request_rx.recv() => {
                 info!("received GDP packet {}", pkt);
+                warn!("request: {:?}", pkt.guid);
                 let topic_state = rib_state_table.get(&pkt.gdpname);
                 info!("the current topic state is {:?}", topic_state);
                 match topic_state {
@@ -46,6 +47,7 @@ pub async fn service_connection_fib_handler(
 
             Some(pkt) = response_rx.recv() => {
                 info!("received GDP response {}", pkt);
+                warn!("resposne: {:?}", pkt.guid);
                 // send it back with response forwarding table 
                 let dst = response_forwarding_table.get(&pkt.gdpname);
                 dst.unwrap().send(pkt.clone()).unwrap();
