@@ -48,7 +48,7 @@ pub async fn service_connection_fib_handler(
                 info!("received GDP response {}", pkt);
                 // send it back with response forwarding table 
                 let dst = response_forwarding_table.get(&pkt.gdpname);
-                dst.unwrap().send(pkt.clone());
+                dst.unwrap().send(pkt.clone()).unwrap();
             }
 
             // update the table

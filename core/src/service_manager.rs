@@ -136,20 +136,20 @@ pub async fn ros_topic_remote_service_provider(
                 };
                 let _ = channel_tx.send(channel_update_msg);
 
-                let channel_update_msg = FibStateChange {
-                    action: FibChangeAction::RESPONSE,
-                    topic_gdp_name: topic_gdp_name,
-                    forward_destination: Some(ros_tx),
-                };
-                let _ = channel_tx.send(channel_update_msg);
-
-
                 let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, response_tx.clone(), rtc_rx));
                 join_handles.push(rtc_handle);
 
                 if existing_topics.contains(&topic_gdp_name) {
                     info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
                 } else {
+                    
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::RESPONSE,
+                        topic_gdp_name: topic_gdp_name,
+                        forward_destination: Some(ros_tx),
+                    };
+                    let _ = channel_tx.send(channel_update_msg);
+
                     existing_topics.push(topic_gdp_name);
                     let mut service = manager_node.lock().unwrap()
                     .create_service_untyped(&topic_name, &topic_type)
@@ -180,6 +180,7 @@ pub async fn ros_topic_remote_service_provider(
                                             // send it to ros
                                             // let msg = r2r::std_msgs::String::from_bytes(&packet).unwrap();
                                             // service.send_response(msg).await.expect("send for ros subscriber failure");
+                                            
                                             info!("received from webrtc in ros_rx {:?}", packet);
                                             let mut respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             let respond_msg_in_json = serde_json::from_str(str::from_utf8(&packet.payload.unwrap()).unwrap()).expect("json parsing failure");
