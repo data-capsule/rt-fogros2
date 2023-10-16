@@ -37,6 +37,19 @@ import random
 import rclpy
 from rclpy.node import Node
 from bench_msgs.srv import AddThreeInts
+import hashlib
+
+
+def print_string_with_color_based_on_name(string, name):
+    
+    hash_value = int(hashlib.sha256(name.encode()).hexdigest(), 16)
+    # Choose a color based on the hash value
+    color_code = hash_value % 8  # You can change the number of colors as needed
+
+    # Define color codes (you can modify this based on your preferences)
+    colors = ["\033[91m", "\033[92m", "\033[93m", "\033[94m", "\033[95m", "\033[96m", "\033[97m", "\033[90m"]
+
+    return colors[color_code] + string + "\033[00m"
 
 
 class AddThreeIntsServiceNode(Node):
@@ -53,7 +66,11 @@ class AddThreeIntsServiceNode(Node):
     def add_three_ints_callback(self, request, response):
         response.sum = request.a + request.b + request.c
         response.server_name = self.host_name
-        self.get_logger().info(f'I am {self.host_name} . Incoming request: a: {request.a}, b: {request.b}, c: {request.c}. Sending: {response.sum}')
+        self.get_logger().info(
+            print_string_with_color_based_on_name(f'Incoming request: a: {request.a}, b: {request.b}, c: {request.c}. Sending: {response.sum}'
+                                                  , self.host_name)
+            
+        )
 
         return response
 

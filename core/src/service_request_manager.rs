@@ -4,7 +4,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-
+use std::collections::HashSet;
 
 /// receive, check, and route GDP messages
 ///
@@ -21,6 +21,8 @@ pub async fn service_connection_fib_handler(
     let mut rib_state_table: HashMap<GDPName, FIBState> = HashMap::new();
 
     let mut response_forwarding_table: HashMap<GDPName, UnboundedSender<GDPPacket>> = HashMap::new();
+
+    let mut processed_requests = HashSet::new();
 
     loop {
         tokio::select! {
@@ -48,9 +50,15 @@ pub async fn service_connection_fib_handler(
             Some(pkt) = response_rx.recv() => {
                 info!("received GDP response {}", pkt);
                 warn!("resposne: {:?}", pkt.guid);
-                // send it back with response forwarding table 
-                let dst = response_forwarding_table.get(&pkt.gdpname);
-                dst.unwrap().send(pkt.clone()).unwrap();
+                if processed_requests.contains(&pkt.guid) {
+                    warn!("the request is processed, thrown away");
+                    continue;
+                }else{
+                    processed_requests.insert(pkt.guid);
+                    // send it back with response forwarding table 
+                    let dst = response_forwarding_table.get(&pkt.gdpname);
+                    dst.unwrap().send(pkt.clone()).unwrap();
+                }  
             }
 
             // update the table

@@ -37,6 +37,18 @@ from time import sleep
 import rclpy
 from rclpy.node import Node
 from bench_msgs.srv import AddThreeInts
+import hashlib 
+
+def print_string_with_color_based_on_name(string, name):
+    
+    hash_value = int(hashlib.sha256(name.encode()).hexdigest(), 16)
+    # Choose a color based on the hash value
+    color_code = hash_value % 8  # You can change the number of colors as needed
+
+    # Define color codes (you can modify this based on your preferences)
+    colors = ["\033[91m", "\033[92m", "\033[93m", "\033[94m", "\033[95m", "\033[96m", "\033[97m", "\033[90m"]
+
+    return colors[color_code] + string + "\033[00m"
 
 class AddThreeIntsAsyncClientNode(Node):
 
@@ -72,8 +84,20 @@ def main(args=None):
     while True:
         add_three_ints_client.get_logger().info(f"I am {host_name} ond {host_ip}. Sending request {a}, {b}, {c}")
         response = add_three_ints_client.send_request(a,b,c)
-        add_three_ints_client.get_logger().info(
-            f'Received from {response.server_name}. Result of add_two_ints: {a} + {b} + {c} = {response.sum}')
+        if response.sum == 0:
+            add_three_ints_client.get_logger().error(
+                print_string_with_color_based_on_name(
+                    f'Result times out!',
+                    response.server_name
+                )
+            )
+        else:
+            add_three_ints_client.get_logger().info(
+                print_string_with_color_based_on_name(
+                    f'Received from {response.server_name}. Result of add_two_ints: {a} + {b} + {c} = {response.sum}',
+                    response.server_name
+                )
+            )
         
         a += 1
         b += 1
