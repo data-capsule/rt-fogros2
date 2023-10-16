@@ -38,6 +38,8 @@ import rclpy
 from rclpy.node import Node
 from bench_msgs.srv import AddThreeInts
 import hashlib 
+from matplotlib import pyplot as plt
+from time import time 
 
 def print_string_with_color_based_on_name(string, name):
     
@@ -81,7 +83,12 @@ def main(args=None):
     b = 1
     c = 2
 
+    latency = dict()
+    latency_timetsamp = dict()
+    beginning_time = time()
+
     while True:
+        time_start = time()
         add_three_ints_client.get_logger().info(f"I am {host_name} ond {host_ip}. Sending request {a}, {b}, {c}")
         response = add_three_ints_client.send_request(a,b,c)
         if response.sum == 0:
@@ -102,8 +109,24 @@ def main(args=None):
         a += 1
         b += 1
         c += 1
-        sleep(1)
-
+        
+        # latency.append(time() - time_start)
+        # plt.plot(latency)
+        #plt.savefig("latency.png")
+        
+        # plot latency of different server_name with dots 
+        if response.server_name not in latency:
+            latency[response.server_name] = []
+            latency_timetsamp[response.server_name] = []
+        latency[response.server_name].append(time() - time_start)
+        latency_timetsamp[response.server_name].append(time() - beginning_time)
+        plt.clf()
+        for server_name in latency:
+            plt.plot(latency_timetsamp[server_name], latency[server_name], label=server_name, marker='o',linestyle = 'None')
+        plt.legend()
+        plt.xlabel("time (s)")
+        plt.ylabel("latency (s)")
+        plt.savefig("latency.png")
 
     add_three_ints_service_node.destroy_node()
     rclpy.shutdown()
