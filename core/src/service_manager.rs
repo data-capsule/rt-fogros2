@@ -31,7 +31,6 @@ use tokio::time::Duration;
 use byteorder::{ByteOrder, LittleEndian};
 pub struct TopicManagerRequest {
     action: FibChangeAction,
-    stream: Option<async_datachannel::DataStream>,
     topic_name: String,
     topic_type: String,
     certificate: Vec<u8>,
@@ -118,7 +117,6 @@ pub async fn ros_topic_remote_service_provider(
                     continue;
                 }
 
-                let stream = request.stream.unwrap();
                 let manager_node = node.clone();
 
                 info!(
@@ -136,8 +134,8 @@ pub async fn ros_topic_remote_service_provider(
                 };
                 let _ = channel_tx.send(channel_update_msg);
 
-                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, response_tx.clone(), rtc_rx));
-                join_handles.push(rtc_handle);
+                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, response_tx.clone(), rtc_rx));
+                // join_handles.push(rtc_handle);
 
                 if existing_topics.contains(&topic_gdp_name) {
                     info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
@@ -269,7 +267,7 @@ pub async fn ros_topic_local_service_caller(
                     continue;
                 }
 
-                let stream = request.stream.unwrap();
+                // let stream = request.stream.unwrap();
                 let manager_node = node.clone();
 
 
@@ -291,8 +289,8 @@ pub async fn ros_topic_local_service_caller(
                 let _ = channel_tx.send(channel_update_msg);
 
 
-                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, fib_tx.clone(), rtc_rx));
-                join_handles.push(rtc_handle);
+                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, fib_tx.clone(), rtc_rx));
+                // join_handles.push(rtc_handle);
 
                 if existing_topics.contains(&topic_gdp_name) {
                     info!("topic {:?} already exists in existing topics; don't need to create another publisher", topic_gdp_name);
@@ -411,7 +409,6 @@ async fn create_new_remote_service_provider(
             info!("publisher registered webrtc stream");
             let topic_creator_request = TopicManagerRequest {
                 action: FibChangeAction::ADD,
-                stream: Some(webrtc_stream),
                 topic_name: topic_name_clone,
                 topic_type: topic_type_clone,
                 certificate: certificate_clone,
@@ -472,7 +469,6 @@ async fn create_new_remote_service_provider(
                     let topic_operation_tx = topic_operation_tx.clone();
                     let topic_creator_request = TopicManagerRequest {
                         action: FibChangeAction::ADD,
-                        stream: Some(webrtc_stream),
                         topic_name: topic_name_clone,
                         topic_type: topic_type_clone,
                         certificate: certificate_clone,
@@ -583,7 +579,6 @@ async fn create_new_local_service_caller(
 
             let topic_creator_request = TopicManagerRequest {
                 action: FibChangeAction::ADD,
-                stream: Some(webrtc_stream),
                 topic_name: topic_name_clone,
                 topic_type: topic_type_clone,
                 certificate: certificate_clone,
@@ -641,7 +636,6 @@ async fn create_new_local_service_caller(
                         let topic_operation_tx = topic_operation_tx.clone();
                         let topic_creator_request = TopicManagerRequest {
                             action: FibChangeAction::ADD,
-                            stream: Some(webrtc_stream),
                             topic_name: topic_name_clone,
                             topic_type: topic_type_clone,
                             certificate:certificate_clone,
@@ -736,7 +730,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 // waiting_rib_handles.push(handle);
                                 let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::ADD,
-                                    stream: None, //Some(webrtc_stream),
                                     topic_name: topic_name_clone,
                                     topic_type: topic_type,
                                     certificate: certificate,
@@ -752,7 +745,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::ADD,
-                                    stream: None, //Some(webrtc_stream),
                                     topic_name: topic_name_clone,
                                     topic_type: topic_type,
                                     certificate: certificate,
@@ -772,7 +764,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_operation_tx = publisher_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::DELETE,
-                                    stream: None,
                                     topic_name: payload.topic_name,
                                     topic_type: payload.topic_type,
                                     certificate: certificate.clone(),
@@ -784,7 +775,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::DELETE,
-                                    stream: None,
                                     topic_name: payload.topic_name,
                                     topic_type: payload.topic_type,
                                     certificate: certificate.clone(),
@@ -804,7 +794,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_operation_tx = publisher_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::RESUME,
-                                    stream: None,
                                     topic_name: payload.topic_name,
                                     topic_type: payload.topic_type,
                                     certificate: certificate.clone(),
@@ -816,7 +805,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::RESUME,
-                                    stream: None,
                                     topic_name: payload.topic_name,
                                     topic_type: payload.topic_type,
                                     certificate: certificate.clone(),
