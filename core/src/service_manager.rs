@@ -29,7 +29,7 @@ use tokio::sync::mpsc::{self};
 
 use tokio::time::Duration;
 use byteorder::{ByteOrder, LittleEndian};
-pub struct TopicModificationRequest {
+pub struct TopicManagerRequest {
     action: FibChangeAction,
     stream: Option<async_datachannel::DataStream>,
     topic_name: String,
@@ -64,7 +64,7 @@ pub struct TopicModificationRequest {
 
 // ROS service(provider) -> webrtc (publish remotely); webrtc -> local service client
 pub async fn ros_topic_remote_service_provider(
-    mut status_recv: UnboundedReceiver<TopicModificationRequest>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
 ) {
     let mut join_handles = vec![];
 
@@ -213,7 +213,7 @@ pub async fn ros_topic_remote_service_provider(
 
 // webrtc -> sgc_local_service_caller (call the service locally) -> webrtc
 pub async fn ros_topic_local_service_caller(
-    mut status_recv: UnboundedReceiver<TopicModificationRequest>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
     let mut join_handles = vec![];
@@ -357,7 +357,7 @@ pub async fn ros_topic_local_service_caller(
 /// remote publisher: subscribe locally, publish to webrtc 
 async fn create_new_remote_service_provider(
     topic_gdp_name: GDPName, topic_name: String, topic_type: String, certificate: Vec<u8>,
-    topic_operation_tx: UnboundedSender<TopicModificationRequest>,
+    topic_operation_tx: UnboundedSender<TopicManagerRequest>,
 ) {
     let redis_url = get_redis_url();
     allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
@@ -409,7 +409,7 @@ async fn create_new_remote_service_provider(
 
             let webrtc_stream = register_webrtc_stream(&publisher_url, None).await;
             info!("publisher registered webrtc stream");
-            let topic_creator_request = TopicModificationRequest {
+            let topic_creator_request = TopicManagerRequest {
                 action: FibChangeAction::ADD,
                 stream: Some(webrtc_stream),
                 topic_name: topic_name_clone,
@@ -470,7 +470,7 @@ async fn create_new_remote_service_provider(
                     let certificate_clone = certificate.clone();
                     let _publisher_topic = publisher_topic.clone();
                     let topic_operation_tx = topic_operation_tx.clone();
-                    let topic_creator_request = TopicModificationRequest {
+                    let topic_creator_request = TopicManagerRequest {
                         action: FibChangeAction::ADD,
                         stream: Some(webrtc_stream),
                         topic_name: topic_name_clone,
@@ -494,7 +494,7 @@ async fn create_new_remote_service_provider(
 
 async fn create_new_local_service_caller(
     topic_gdp_name: GDPName, topic_name: String, topic_type: String, certificate: Vec<u8>,
-    topic_operation_tx: UnboundedSender<TopicModificationRequest>,
+    topic_operation_tx: UnboundedSender<TopicManagerRequest>,
 ) {
     let subscriber_listening_gdp_name = generate_random_gdp_name();
     let redis_url = get_redis_url();
@@ -581,7 +581,7 @@ async fn create_new_local_service_caller(
                 register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
             info!("subscriber registered webrtc stream");
 
-            let topic_creator_request = TopicModificationRequest {
+            let topic_creator_request = TopicManagerRequest {
                 action: FibChangeAction::ADD,
                 stream: Some(webrtc_stream),
                 topic_name: topic_name_clone,
@@ -639,7 +639,7 @@ async fn create_new_local_service_caller(
                         let topic_type_clone = topic_type.clone();
                         let certificate_clone = certificate.clone();
                         let topic_operation_tx = topic_operation_tx.clone();
-                        let topic_creator_request = TopicModificationRequest {
+                        let topic_creator_request = TopicManagerRequest {
                             action: FibChangeAction::ADD,
                             stream: Some(webrtc_stream),
                             topic_name: topic_name_clone,
@@ -724,30 +724,40 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         match action.as_str() {
                             // provide service locally and send to remote service
                             "client" => { 
-                                let topic_name_cloned = topic_name.clone();
+                                let topic_name_clone = topic_name.clone();
                                 let certificate = certificate.clone();
                                 let topic_operation_tx = publisher_operation_tx.clone();
-                                let handle = tokio::spawn(
-                                    async move {
-                                        create_new_local_service_caller(topic_gdp_name, topic_name_cloned, topic_type, certificate,
-                                            topic_operation_tx).await;
-                                    }
-                                );
-                                waiting_rib_handles.push(handle);
+                                // let handle = tokio::spawn(
+                                //     async move {
+                                //         create_new_local_service_caller(topic_gdp_name, topic_name_cloned, topic_type, certificate,
+                                //             topic_operation_tx).await;
+                                //     }
+                                // );
+                                // waiting_rib_handles.push(handle);
+                                let topic_creator_request = TopicManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    stream: None, //Some(webrtc_stream),
+                                    topic_name: topic_name_clone,
+                                    topic_type: topic_type,
+                                    certificate: certificate,
+                                };
+                                let _ = topic_operation_tx.send(topic_creator_request);
                             }
 
                             // provide service remotely and interact with local service, and send back
                             "service" => {
-                                let topic_name_cloned = topic_name.clone();
+                                let topic_name_clone = topic_name.clone();
                                 let certificate = certificate.clone();
                                 let topic_type = topic_type.clone();
                                 let topic_operation_tx = subscriber_operation_tx.clone();
-                                let handle = tokio::spawn(
-                                    async move {
-                                        create_new_remote_service_provider(topic_gdp_name, topic_name_cloned, topic_type, certificate, topic_operation_tx).await;
-                                    }
-                                );
-                                waiting_rib_handles.push(handle);
+                                let topic_creator_request = TopicManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    stream: None, //Some(webrtc_stream),
+                                    topic_name: topic_name_clone,
+                                    topic_type: topic_type,
+                                    certificate: certificate,
+                                };
+                                let _ = topic_operation_tx.send(topic_creator_request);
                             }
                             _ => {
                                 warn!("unknown action {}", action);
@@ -760,7 +770,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         match payload.ros_op.as_str() {
                             "pub" => {
                                 let topic_operation_tx = publisher_operation_tx.clone();
-                                let topic_creator_request = TopicModificationRequest {
+                                let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::DELETE,
                                     stream: None,
                                     topic_name: payload.topic_name,
@@ -772,7 +782,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             }, 
                             "sub" => {
                                 let topic_operation_tx = subscriber_operation_tx.clone();
-                                let topic_creator_request = TopicModificationRequest {
+                                let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::DELETE,
                                     stream: None,
                                     topic_name: payload.topic_name,
@@ -792,7 +802,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         match payload.ros_op.as_str() {
                             "pub" => {
                                 let topic_operation_tx = publisher_operation_tx.clone();
-                                let topic_creator_request = TopicModificationRequest {
+                                let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::RESUME,
                                     stream: None,
                                     topic_name: payload.topic_name,
@@ -804,7 +814,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             }, 
                             "sub" => {
                                 let topic_operation_tx = subscriber_operation_tx.clone();
-                                let topic_creator_request = TopicModificationRequest {
+                                let topic_creator_request = TopicManagerRequest {
                                     action: FibChangeAction::RESUME,
                                     stream: None,
                                     topic_name: payload.topic_name,
