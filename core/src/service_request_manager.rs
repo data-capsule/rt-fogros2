@@ -1,10 +1,31 @@
 use crate::{
-    structs::{GDPName, GDPPacket, GdpAction}, connection_fib::{FibStateChange, FIBState, FibChangeAction, TopicStateInFIB},
+    structs::{GDPName, GDPPacket, GdpAction}, connection_fib::{FibChangeAction, TopicStateInFIB},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::collections::HashSet;
+
+
+#[derive(Debug)]
+pub struct FibStateChange {
+    pub action: FibChangeAction,
+    pub topic_gdp_name: GDPName,
+    pub forward_destination: Option<UnboundedSender<GDPPacket>>,
+}
+
+#[derive(Debug)]
+pub struct FibConnection {
+    pub state: TopicStateInFIB,
+    receiver: UnboundedSender<GDPPacket>, 
+}
+
+
+#[derive(Debug)]
+pub struct FIBState {
+    pub receivers: Vec<FibConnection>,
+}
+
 
 /// receive, check, and route GDP messages
 ///
@@ -35,6 +56,10 @@ pub async fn service_connection_fib_handler(
                     GdpAction::Request => {
                         info!("received GDP request {}", pkt);
                         warn!("request: {:?}", pkt.guid);
+                        if processed_requests.contains(&pkt.guid) {
+                            warn!("the request is processed, thrown away");
+                            continue;
+                        }
                         let topic_state = rib_state_table.get(&pkt.gdpname);
                         info!("the current topic state is {:?}", topic_state);
                         match topic_state {

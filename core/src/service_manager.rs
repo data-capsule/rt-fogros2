@@ -128,16 +128,6 @@ pub async fn ros_topic_remote_service_provider(
 
                 // ROS subscriber -> FIB -> RTC
                 let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
-                let (rtc_tx, rtc_rx) = mpsc::unbounded_channel();
-                let channel_update_msg = FibStateChange {
-                    action: FibChangeAction::ADD,
-                    topic_gdp_name: topic_gdp_name,
-                    forward_destination: Some(rtc_tx),
-                };
-                let _ = channel_tx.send(channel_update_msg);
-
-                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, response_tx.clone(), rtc_rx));
-                // join_handles.push(rtc_handle);
 
                 if existing_topics.contains(&topic_gdp_name) {
                     info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
