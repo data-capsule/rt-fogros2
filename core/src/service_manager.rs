@@ -749,10 +749,10 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
 
                             "sender" => {
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                                let (rtc_to_local_tx, rtc_to_local_rx) = mpsc::unbounded_channel();
                                 let sender_url = "sender".to_string();
                                 let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
-                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, rtc_to_local_tx, local_to_rtc_rx));
+                                let fib_tx_clone = fib_tx.clone();
+                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
                                 waiting_rib_handles.push(rtc_handle);
                                 let channel_update_msg = FibStateChange {
                                     action: FibChangeAction::ADD,
@@ -764,12 +764,12 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
 
                             "receiver" => {
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                                let (rtc_to_local_tx, rtc_to_local_rx) = mpsc::unbounded_channel();
+                                let fib_tx_clone = fib_tx.clone();
                                 let receiver_url = "receiver".to_string();
                                 let peer_dialing_url = "sender".to_string();
                                 let webrtc_stream =
                                     register_webrtc_stream(&receiver_url, Some(peer_dialing_url)).await;
-                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream,rtc_to_local_tx,local_to_rtc_rx));
+                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
                                 waiting_rib_handles.push(rtc_handle);
                                 let channel_update_msg = FibStateChange {
                                     action: FibChangeAction::ADD,
