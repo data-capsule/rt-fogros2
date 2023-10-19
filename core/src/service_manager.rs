@@ -11,7 +11,7 @@ use crate::structs::{
     Packet, generate_gdp_name_from_string, GDPPacket,
 };
 
-use crate::connection_fib::{FibChangeAction, FibStateChange};
+use crate::service_request_manager::{FibChangeAction, FibStateChange};
 use serde::{Deserialize, Serialize};
 
 use std::env;
@@ -29,8 +29,21 @@ use tokio::sync::mpsc::{self};
 
 use tokio::time::Duration;
 use byteorder::{ByteOrder, LittleEndian};
+
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
+pub enum TopicManagerAction {
+    ADD,
+    PAUSE, // pausing the forwarding of the topic, keeping connections alive
+    PAUSEADD, // adding the entry to FIB, but keeps it paused
+    RESUME, // resume a paused topic
+    DELETE, // deleting a local topic interface and all its connections 
+    RESPONSE,
+}
+
+
 pub struct TopicManagerRequest {
-    action: FibChangeAction,
+    action: TopicManagerAction,
     topic_name: String,
     topic_type: String,
     certificate: Vec<u8>,
@@ -109,13 +122,14 @@ pub async fn ros_topic_remote_service_provider(
                     &certificate,
                 ));
 
-                if request.action != FibChangeAction::ADD {
-                    let channel_update_msg = FibStateChange {
-                        action: request.action,
-                        topic_gdp_name: topic_gdp_name,
-                        forward_destination: None,
-                    };
-                    let _ = channel_tx.send(channel_update_msg);
+                if request.action != TopicManagerAction::ADD {
+                    // let channel_update_msg = FibStateChange {
+                    //     action: request.action,
+                    //     topic_gdp_name: topic_gdp_name,
+                    //     forward_destination: None,
+                    // };
+                    // let _ = channel_tx.send(channel_update_msg);
+                    error!("action {:?} not supported in ros_topic_remote_service_provider", request.action);
                     continue;
                 }
 
@@ -243,13 +257,14 @@ pub async fn ros_topic_local_service_caller(
                     &certificate,
                 ));
 
-                if request.action != FibChangeAction::ADD {
-                    let channel_update_msg = FibStateChange {
-                        action: request.action,
-                        topic_gdp_name: topic_gdp_name,
-                        forward_destination: None,
-                    };
-                    let _ = channel_tx.send(channel_update_msg);
+                if request.action != TopicManagerAction::ADD {
+                    // let channel_update_msg = FibStateChange {
+                    //     action: request.action,
+                    //     topic_gdp_name: topic_gdp_name,
+                    //     forward_destination: None,
+                    // };
+                    // let _ = channel_tx.send(channel_update_msg);
+                    error!("action {:?} not supported in ros_topic_remote_service_provider", request.action);
                     continue;
                 }
 
@@ -400,7 +415,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 // );
                                 // waiting_rib_handles.push(handle);
                                 let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::ADD,
+                                    action: TopicManagerAction::ADD,
                                     topic_name: topic_name_clone,
                                     topic_type: topic_type,
                                     certificate: certificate,
@@ -415,7 +430,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_type = topic_type.clone();
                                 let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::ADD,
+                                    action: TopicManagerAction::ADD,
                                     topic_name: topic_name_clone,
                                     topic_type: topic_type,
                                     certificate: certificate,
@@ -431,7 +446,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         let topic_name = payload.topic_name;
                         let topic_type = payload.topic_type;
                         let action = payload.ros_op;
-                                                    let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                        let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                                 &topic_name,
                                 &topic_type,
                                 &certificate,
@@ -457,7 +472,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 // );
                                 // waiting_rib_handles.push(handle);
                                 let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::ADD,
+                                    action: TopicManagerAction::ADD,
                                     topic_name: topic_name_clone,
                                     topic_type: topic_type,
                                     certificate: certificate,
@@ -472,7 +487,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_type = topic_type.clone();
                                 let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::ADD,
+                                    action: TopicManagerAction::ADD,
                                     topic_name: topic_name_clone,
                                     topic_type: topic_type,
                                     certificate: certificate,
@@ -519,66 +534,66 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             }
                         }
                     }
-                    "del" => {
-                        info!("deleting topic {:?}", payload);
+                    // "del" => {
+                    //     info!("deleting topic {:?}", payload);
                         
-                        match payload.ros_op.as_str() {
-                            "pub" => {
-                                let topic_operation_tx = publisher_operation_tx.clone();
-                                let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::DELETE,
-                                    topic_name: payload.topic_name,
-                                    topic_type: payload.topic_type,
-                                    certificate: certificate.clone(),
-                                };
-                                let _ = topic_operation_tx.send(topic_creator_request);
+                    //     match payload.ros_op.as_str() {
+                    //         "pub" => {
+                    //             let topic_operation_tx = publisher_operation_tx.clone();
+                    //             let topic_creator_request = TopicManagerRequest {
+                    //                 action: TopicManagerAction::DELETE,
+                    //                 topic_name: payload.topic_name,
+                    //                 topic_type: payload.topic_type,
+                    //                 certificate: certificate.clone(),
+                    //             };
+                    //             let _ = topic_operation_tx.send(topic_creator_request);
 
-                            }, 
-                            "sub" => {
-                                let topic_operation_tx = subscriber_operation_tx.clone();
-                                let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::DELETE,
-                                    topic_name: payload.topic_name,
-                                    topic_type: payload.topic_type,
-                                    certificate: certificate.clone(),
-                                };
-                                let _ = topic_operation_tx.send(topic_creator_request);
-                            }
-                            _ => {
-                                warn!("unknown action {}", payload.ros_op);
-                            }
-                        }
-                    },               
-                    "resume" => {
-                        info!("resuming topic {:?}", payload);
+                    //         }, 
+                    //         "sub" => {
+                    //             let topic_operation_tx = subscriber_operation_tx.clone();
+                    //             let topic_creator_request = TopicManagerRequest {
+                    //                 action: TopicManagerAction::DELETE,
+                    //                 topic_name: payload.topic_name,
+                    //                 topic_type: payload.topic_type,
+                    //                 certificate: certificate.clone(),
+                    //             };
+                    //             let _ = topic_operation_tx.send(topic_creator_request);
+                    //         }
+                    //         _ => {
+                    //             warn!("unknown action {}", payload.ros_op);
+                    //         }
+                    //     }
+                    // },               
+                    // "resume" => {
+                    //     info!("resuming topic {:?}", payload);
                         
-                        match payload.ros_op.as_str() {
-                            "pub" => {
-                                let topic_operation_tx = publisher_operation_tx.clone();
-                                let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::RESUME,
-                                    topic_name: payload.topic_name,
-                                    topic_type: payload.topic_type,
-                                    certificate: certificate.clone(),
-                                };
-                                let _ = topic_operation_tx.send(topic_creator_request);
+                    //     match payload.ros_op.as_str() {
+                    //         "pub" => {
+                    //             let topic_operation_tx = publisher_operation_tx.clone();
+                    //             let topic_creator_request = TopicManagerRequest {
+                    //                 action: TopicManagerAction::RESUME,
+                    //                 topic_name: payload.topic_name,
+                    //                 topic_type: payload.topic_type,
+                    //                 certificate: certificate.clone(),
+                    //             };
+                    //             let _ = topic_operation_tx.send(topic_creator_request);
 
-                            }, 
-                            "sub" => {
-                                let topic_operation_tx = subscriber_operation_tx.clone();
-                                let topic_creator_request = TopicManagerRequest {
-                                    action: FibChangeAction::RESUME,
-                                    topic_name: payload.topic_name,
-                                    topic_type: payload.topic_type,
-                                    certificate: certificate.clone(),
-                                };
-                                let _ = topic_operation_tx.send(topic_creator_request);
-                            }
-                            _ => {
-                                warn!("unknown action {}", payload.ros_op);
-                            }
-                        }
-                    }
+                    //         }, 
+                    //         "sub" => {
+                    //             let topic_operation_tx = subscriber_operation_tx.clone();
+                    //             let topic_creator_request = TopicManagerRequest {
+                    //                 action: TopicManagerAction::RESUME,
+                    //                 topic_name: payload.topic_name,
+                    //                 topic_type: payload.topic_type,
+                    //                 certificate: certificate.clone(),
+                    //             };
+                    //             let _ = topic_operation_tx.send(topic_creator_request);
+                    //         }
+                    //         _ => {
+                    //             warn!("unknown action {}", payload.ros_op);
+                    //         }
+                    //     }
+                    // }
 
                     _ => {
                         info!("operation {} not handled!", payload.api_op);
