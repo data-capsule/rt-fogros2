@@ -275,7 +275,6 @@ pub async fn ros_topic_local_service_caller(
 
                 // RTC -> FIB -> ROS publisher
                 let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
-                let (rtc_tx, rtc_rx) = mpsc::unbounded_channel();
 
                 let channel_update_msg = FibStateChange {
                     action: FibChangeAction::ADD,
@@ -300,7 +299,7 @@ pub async fn ros_topic_local_service_caller(
                     let ros_handle = tokio::spawn(async move {
                         info!("[ros_topic_local_service_caller] ROS handling loop has started!");
                         loop{
-                            let pkt_to_forward = ros_rx.recv().await.expect("ros_topic_local_service_caller crashed!!");
+                            let pkt_to_forward = ros_rx.recv().await.unwrap();
                             if pkt_to_forward.action == GdpAction::Forward {
                                 info!("new payload to publish {:?}", pkt_to_forward.guid);
                                 if pkt_to_forward.gdpname == topic_gdp_name {
@@ -312,7 +311,7 @@ pub async fn ros_topic_local_service_caller(
                                     //send back the response to the rtc
                                     let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id)); 
                                     let packet = construct_gdp_forward_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&resp.unwrap().unwrap()).unwrap(), packet_guid);
-                                    rtc_tx.send(packet).expect("send for ros subscriber failure");
+                                    fib_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{
                                     info!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
                                 }
@@ -758,7 +757,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let channel_update_msg = FibStateChange {
                                     action: FibChangeAction::ADD,
                                     topic_gdp_name: topic_gdp_name,
-                                    forward_destination: None,
+                                    forward_destination: Some(local_to_rtc_tx),
                                 };
                                 let _ = channel_tx.send(channel_update_msg);
                             }
@@ -775,7 +774,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let channel_update_msg = FibStateChange {
                                     action: FibChangeAction::ADD,
                                     topic_gdp_name: topic_gdp_name,
-                                    forward_destination: None,
+                                    forward_destination: Some(local_to_rtc_tx),
                                 };
                                 let _ = channel_tx.send(channel_update_msg);
                             }
