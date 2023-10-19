@@ -8,7 +8,7 @@ use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_forward_wi
 use crate::service_request_manager::{service_connection_fib_handler};
 use crate::structs::{
     gdp_name_to_string, generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GdpAction,
-    Packet, generate_gdp_name_from_string,
+    Packet, generate_gdp_name_from_string, GDPPacket,
 };
 
 use crate::connection_fib::{FibChangeAction, FibStateChange};
@@ -64,16 +64,18 @@ pub struct TopicManagerRequest {
 // ROS service(provider) -> webrtc (publish remotely); webrtc -> local service client
 pub async fn ros_topic_remote_service_provider(
     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    mut fib_tx : UnboundedSender<GDPPacket>,
+    mut channel_tx: UnboundedSender<FibStateChange>,
 ) {
     let mut join_handles = vec![];
 
-    let (request_tx, request_rx) = mpsc::unbounded_channel();
-    let (response_tx, response_rx) = mpsc::unbounded_channel();
-    let (channel_tx, channel_rx) = mpsc::unbounded_channel();
-    let fib_handle = tokio::spawn(async move {
-        service_connection_fib_handler(request_rx, response_rx, channel_rx).await;
-    });
-    join_handles.push(fib_handle);
+    // let (request_tx, request_rx) = mpsc::unbounded_channel();
+    // let (response_tx, response_rx) = mpsc::unbounded_channel();
+    // let (channel_tx, channel_rx) = mpsc::unbounded_channel();
+    // let fib_handle: tokio::task::JoinHandle<()> = tokio::spawn(async move {
+    //     service_connection_fib_handler(request_rx, response_rx, channel_rx).await;
+    // });
+    // join_handles.push(fib_handle);
 
 
     let ctx = r2r::Context::create().expect("context creation failure");
@@ -100,7 +102,7 @@ pub async fn ros_topic_remote_service_provider(
                 let topic_type = request.topic_type;
                 let action = request.action;
                 let certificate = request.certificate;
-                let request_tx = request_tx.clone();
+                let request_tx = fib_tx.clone();
                 let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                     &topic_name,
                     &topic_type,
@@ -212,17 +214,11 @@ pub async fn ros_topic_remote_service_provider(
 // webrtc -> sgc_local_service_caller (call the service locally) -> webrtc
 pub async fn ros_topic_local_service_caller(
     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    mut fib_tx : UnboundedSender<GDPPacket>,
+    mut channel_tx: UnboundedSender<FibStateChange>,
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
     let mut join_handles = vec![];
-
-    let (fib_tx, fib_rx) = mpsc::unbounded_channel();
-    let (channel_tx, channel_rx) = mpsc::unbounded_channel();
-    let fib_handle = tokio::spawn(async move {
-        connection_fib_handler(fib_rx, channel_rx).await;
-    });
-    join_handles.push(fib_handle);
-
 
     let ctx = r2r::Context::create().expect("context creation failure");
     let node = Arc::new(Mutex::new(
@@ -350,7 +346,6 @@ pub async fn ros_topic_local_service_caller(
         }
     }
 }
-
 
 /// remote publisher: subscribe locally, publish to webrtc 
 async fn create_new_remote_service_provider(
@@ -674,19 +669,29 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     let certificate = std::fs::read(crypto_path)
     .expect("crypto file not found!");
 
+    let (fib_tx, fib_rx) = mpsc::unbounded_channel();
+    let (channel_tx, channel_rx) = mpsc::unbounded_channel();
+    let fib_handle = tokio::spawn(async move {
+        service_connection_fib_handler(fib_rx, channel_rx).await;
+    });
+    waiting_rib_handles.push(fib_handle);
 
     let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
+    let channel_tx_clone = channel_tx.clone();
+    let fib_tx_clone = fib_tx.clone();
     let topic_creator_handle = tokio::spawn(async move {
-        ros_topic_remote_service_provider(publisher_operation_rx).await;
+        ros_topic_remote_service_provider(publisher_operation_rx, fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
 
     let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
+    let channel_tx_clone = channel_tx.clone();
+    let fib_tx_clone = fib_tx.clone();
     let topic_creator_handle = tokio::spawn(async move {
         // This is because the ROS node creation is not thread safe 
         // See: https://github.com/ros2/rosbag2/issues/329
         std::thread::sleep(std::time::Duration::from_millis(500));
-        ros_topic_local_service_caller(subscriber_operation_rx).await;
+        ros_topic_local_service_caller(subscriber_operation_rx,  fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
 
@@ -700,15 +705,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         let topic_name = payload.topic_name;
                         let topic_type = payload.topic_type;
                         let action = payload.ros_op;
-
-                        // if topic_status.contains_key(&topic_name) {
-                        //     info!(
-                        //         "topic {} already exist {:?}",
-                        //         topic_name, topic_status
-                        //     );
-                        //     continue;
-                        // }
-
                         let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                             &topic_name,
                             &topic_type,
@@ -750,6 +746,38 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     certificate: certificate,
                                 };
                                 let _ = topic_operation_tx.send(topic_creator_request);
+                            }
+
+                            "sender" => {
+                                let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                                let (rtc_to_local_tx, rtc_to_local_rx) = mpsc::unbounded_channel();
+                                let sender_url = "sender".to_string();
+                                let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
+                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, rtc_to_local_tx, local_to_rtc_rx));
+                                waiting_rib_handles.push(rtc_handle);
+                                let channel_update_msg = FibStateChange {
+                                    action: FibChangeAction::ADD,
+                                    topic_gdp_name: topic_gdp_name,
+                                    forward_destination: None,
+                                };
+                                let _ = channel_tx.send(channel_update_msg);
+                            }
+
+                            "receiver" => {
+                                let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                                let (rtc_to_local_tx, rtc_to_local_rx) = mpsc::unbounded_channel();
+                                let receiver_url = "receiver".to_string();
+                                let peer_dialing_url = "sender".to_string();
+                                let webrtc_stream =
+                                    register_webrtc_stream(&receiver_url, Some(peer_dialing_url)).await;
+                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream,rtc_to_local_tx,local_to_rtc_rx));
+                                waiting_rib_handles.push(rtc_handle);
+                                let channel_update_msg = FibStateChange {
+                                    action: FibChangeAction::ADD,
+                                    topic_gdp_name: topic_gdp_name,
+                                    forward_destination: None,
+                                };
+                                let _ = channel_tx.send(channel_update_msg);
                             }
                             _ => {
                                 warn!("unknown action {}", action);

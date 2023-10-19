@@ -14,19 +14,19 @@ use std::collections::HashSet;
 ///     TODO: use future if the destination is unknown
 /// forward the packet to corresponding send_tx
 pub async fn service_connection_fib_handler(
-    mut request_rx: UnboundedReceiver<GDPPacket>, // its tx used to transmit data to fib
-    mut response_rx: UnboundedReceiver<GDPPacket>, // its tx used to transmit data to fib
+    mut fib_rx: UnboundedReceiver<GDPPacket>, // its tx used to transmit data to fib
+    // mut response_rx: UnboundedReceiver<GDPPacket>, // its tx used to transmit data to fib
     mut channel_rx: UnboundedReceiver<FibStateChange>, /* its tx used to update fib with new names/records */
 ) {
     let mut rib_state_table: HashMap<GDPName, FIBState> = HashMap::new();
 
     let mut response_forwarding_table: HashMap<GDPName, UnboundedSender<GDPPacket>> = HashMap::new();
 
-    let mut processed_requests = HashSet::new();
+    // let mut processed_requests = HashSet::new();
 
     loop {
         tokio::select! {
-            Some(pkt) = request_rx.recv() => {
+            Some(pkt) = fib_rx.recv() => {
                 info!("received GDP packet {}", pkt);
                 warn!("request: {:?}", pkt.guid);
                 let topic_state = rib_state_table.get(&pkt.gdpname);
@@ -47,19 +47,19 @@ pub async fn service_connection_fib_handler(
                 }
             }
 
-            Some(pkt) = response_rx.recv() => {
-                info!("received GDP response {}", pkt);
-                warn!("resposne: {:?}", pkt.guid);
-                if processed_requests.contains(&pkt.guid) {
-                    warn!("the request is processed, thrown away");
-                    continue;
-                }else{
-                    processed_requests.insert(pkt.guid);
-                    // send it back with response forwarding table 
-                    let dst = response_forwarding_table.get(&pkt.gdpname);
-                    dst.unwrap().send(pkt.clone()).unwrap();
-                }  
-            }
+            // Some(pkt) = fib_tx.recv() => {
+            //     info!("received GDP response {}", pkt);
+            //     warn!("response: {:?}", pkt.guid);
+            //     if processed_requests.contains(&pkt.guid) {
+            //         warn!("the request is processed, thrown away");
+            //         continue;
+            //     }else{
+            //         processed_requests.insert(pkt.guid);
+            //         // send it back with response forwarding table 
+            //         let dst = response_forwarding_table.get(&pkt.gdpname);
+            //         dst.unwrap().send(pkt.clone()).unwrap();
+            //     }  
+            // }
 
             // update the table
             Some(update) = channel_rx.recv() => {
