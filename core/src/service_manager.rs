@@ -5,13 +5,14 @@ use crate::connection_fib::connection_fib_handler;
 use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
 
 use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_request_with_guid, construct_gdp_response_with_guid};
-use crate::service_request_manager::{service_connection_fib_handler};
+use crate::service_request_manager::{service_connection_fib_handler, FibConnectionType};
 use crate::structs::{
     gdp_name_to_string, generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GdpAction,
     Packet, generate_gdp_name_from_string, GDPPacket,
 };
 
 use crate::service_request_manager::{FibChangeAction, FibStateChange};
+use hyper::client::connect::Connect;
 use serde::{Deserialize, Serialize};
 
 use std::env;
@@ -148,9 +149,11 @@ pub async fn ros_topic_remote_service_provider(
                 } else {
                     
                     let channel_update_msg = FibStateChange {
-                        action: FibChangeAction::RESPONSE,
+                        action: FibChangeAction::ADD,
+                        connection_type: FibConnectionType::RESPONSE,
                         topic_gdp_name: topic_gdp_name,
                         forward_destination: Some(ros_tx),
+                        description: Some("ros service response".to_string()),
                     };
                     let _ = channel_tx.send(channel_update_msg);
 
@@ -283,8 +286,10 @@ pub async fn ros_topic_local_service_caller(
 
                 let channel_update_msg = FibStateChange {
                     action: FibChangeAction::ADD,
+                    connection_type: FibConnectionType::REQUEST,
                     topic_gdp_name: topic_gdp_name,
                     forward_destination: Some(ros_tx),
+                    description: Some("ros service request".to_string()),
                 };
                 let _ = channel_tx.send(channel_update_msg);
 
@@ -451,11 +456,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 &topic_type,
                                 &certificate,
                             ));
-                            let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                                &topic_name,
-                                &topic_type,
-                                &certificate,
-                            ));
                             
                         match action.as_str() {
 
@@ -495,6 +495,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let _ = topic_operation_tx.send(topic_creator_request);
                             }
 
+                            // source: fib -> webrtc 
                             "source" => {
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 // let sender_url = "sender".to_string();
@@ -511,6 +512,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 // let _ = channel_tx.send(channel_update_msg);
                             }
 
+                            // destination: webrtc -> fib
                             "destination" => {
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 let fib_tx_clone = fib_tx.clone();
@@ -525,7 +527,9 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let channel_update_msg = FibStateChange {
                                     action: FibChangeAction::ADD,
                                     topic_gdp_name: topic_gdp_name,
+                                    connection_type: FibConnectionType::REQUEST, //TODO
                                     forward_destination: Some(local_to_rtc_tx),
+                                    description: Some("webrtc stream".to_string()),
                                 };
                                 let _ = channel_tx.send(channel_update_msg);
                             }

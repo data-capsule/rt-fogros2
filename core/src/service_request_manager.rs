@@ -14,7 +14,13 @@ pub enum FibChangeAction {
     PAUSEADD, // adding the entry to FIB, but keeps it paused
     RESUME, // resume a paused topic
     DELETE, // deleting a local topic interface and all its connections 
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
+pub enum FibConnectionType {
+    REQUEST,
     RESPONSE,
+    BIDIRECTIONAL,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
@@ -27,14 +33,17 @@ pub enum TopicStateInFIB {
 #[derive(Debug)]
 pub struct FibStateChange {
     pub action: FibChangeAction,
+    pub connection_type: FibConnectionType,
     pub topic_gdp_name: GDPName,
     pub forward_destination: Option<UnboundedSender<GDPPacket>>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct FibConnection {
     pub state: TopicStateInFIB,
     tx: UnboundedSender<GDPPacket>, 
+    pub description: Option<String>,
 }
 
 
@@ -102,16 +111,32 @@ pub async fn service_connection_fib_handler(
                             continue;
                         }else{
                             processed_requests.insert(pkt.guid);
-                            // send it back with response forwarding table 
-                            let dst = response_forwarding_table.get(&pkt.gdpname);
-                            match dst {
-                                Some(v) => {
-                                    let _ = v.send(pkt.clone());
+                            let topic_state = rib_state_table.get(&pkt.gdpname);
+                            info!("the current topic state is {:?}", topic_state);
+                            match topic_state {
+                                Some(s) => {
+                                    for dst in &s.receivers {
+                                        if dst.state == TopicStateInFIB::RUNNING {
+                                            let _ = dst.tx.send(pkt.clone());
+                                        } else {
+                                            warn!("the current topic state is {:?}, not forwarded", topic_state)
+                                        }
+                                    }
                                 },
                                 None => {
-                                    error!("the response channel does not exist");
+                                    error!("The gdpname {:?} does not exist", pkt.gdpname)
                                 }
                             }
+                            // send it back with response forwarding table 
+                            // let dst = response_forwarding_table.get(&pkt.gdpname);
+                            // match dst {
+                            //     Some(v) => {
+                            //         let _ = v.send(pkt.clone());
+                            //     },
+                            //     None => {
+                            //         error!("the response channel does not exist");
+                            //     }
+                            // }
                         }  
                     },
                     _ => {
@@ -136,6 +161,7 @@ pub async fn service_connection_fib_handler(
                                 v.receivers.push(FibConnection{
                                     state: TopicStateInFIB::RUNNING,
                                     tx: update.forward_destination.unwrap(),
+                                    description: update.description,
                                 });
                             }
                             None =>{
@@ -148,6 +174,7 @@ pub async fn service_connection_fib_handler(
                                     receivers: vec!(FibConnection{
                                         state: TopicStateInFIB::RUNNING,
                                         tx: update.forward_destination.unwrap(),
+                                        description: update.description,
                                     }),
                                 };
                                 rib_state_table.insert(
@@ -158,11 +185,11 @@ pub async fn service_connection_fib_handler(
                         };
                         // TODO: pause add
                     },
-                    FibChangeAction::RESPONSE => {
-                        info!("Response channel received {:?}", update);
-                        // insert the response channel
-                        response_forwarding_table.insert(update.topic_gdp_name, update.forward_destination.unwrap());
-                    }
+                    // FibChangeAction::RESPONSE => {
+                    //     info!("Response channel received {:?}", update);
+                    //     // insert the response channel
+                    //     response_forwarding_table.insert(update.topic_gdp_name, update.forward_destination.unwrap());
+                    // }
                     FibChangeAction::PAUSE => todo!(),
                     FibChangeAction::PAUSEADD => todo!(),
                     FibChangeAction::RESUME => todo!(),
