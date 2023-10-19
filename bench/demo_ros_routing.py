@@ -78,7 +78,7 @@ server_service = [
 addr = "localhost:3005"
 ros_topic = {
     "api_op": "add",
-    "ros_op": "sender",
+    "ros_op": "source",
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
@@ -92,7 +92,7 @@ print(response)
 addr = "localhost:3002"
 ros_topic = {
     "api_op": "add",
-    "ros_op": "receiver",
+    "ros_op": "destination",
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
