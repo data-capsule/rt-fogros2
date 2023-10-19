@@ -300,7 +300,7 @@ pub async fn ros_topic_local_service_caller(
                         info!("[ros_topic_local_service_caller] ROS handling loop has started!");
                         loop{
                             let pkt_to_forward = ros_rx.recv().await.unwrap();
-                            if pkt_to_forward.action == GdpAction::Forward {
+                            if pkt_to_forward.action == GdpAction::Request {
                                 info!("new payload to publish {:?}", pkt_to_forward.guid);
                                 if pkt_to_forward.gdpname == topic_gdp_name {
                                     let payload = pkt_to_forward.get_byte_payload().unwrap();
@@ -313,29 +313,14 @@ pub async fn ros_topic_local_service_caller(
                                     let packet = construct_gdp_response_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&resp.unwrap().unwrap()).unwrap(), packet_guid);
                                     fib_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{
-                                    info!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
+                                    warn!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
                                 }
+                            } else {
+                                warn!("received a packet with action {:?} in ros_topic_local_service_caller", pkt_to_forward.action);
                             }
                         }
                     });
 
-                    // let ros_handle = tokio::spawn(async move {
-                    //     info!("[ros_topic_remote_subscriber_handler] ROS handling loop has started!");
-                    //     loop{
-                    //         let pkt_to_forward = ros_rx.recv().await.expect("ros_topic_remote_subscriber_handler crashed!!");
-                    //         if pkt_to_forward.action == GdpAction::Forward {
-                    //             info!("new payload to publish");
-                    //             if pkt_to_forward.gdpname == topic_gdp_name {
-                    //                 let payload = pkt_to_forward.get_byte_payload().unwrap();
-                    //                 //let ros_msg = serde_json::from_str(str::from_utf8(payload).unwrap()).expect("json parsing failure");
-                    //                 // info!("the decoded payload to publish is {:?}", ros_msg);
-                    //                 publisher.publish(payload.clone()).unwrap();
-                    //             } else{
-                    //                 info!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
-                    //             }
-                    //         }
-                    //     }
-                    // });
                    join_handles.push(ros_handle);
 
 

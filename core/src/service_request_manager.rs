@@ -1,5 +1,5 @@
 use crate::{
-    structs::{GDPName, GDPPacket}, connection_fib::{FibStateChange, FIBState, FibChangeAction, TopicStateInFIB},
+    structs::{GDPName, GDPPacket, GdpAction}, connection_fib::{FibStateChange, FIBState, FibChangeAction, TopicStateInFIB},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,44 +22,57 @@ pub async fn service_connection_fib_handler(
 
     let mut response_forwarding_table: HashMap<GDPName, UnboundedSender<GDPPacket>> = HashMap::new();
 
-    // let mut processed_requests = HashSet::new();
+    let mut processed_requests = HashSet::new();
 
     loop {
         tokio::select! {
             Some(pkt) = fib_rx.recv() => {
-                info!("received GDP packet {}", pkt);
-                warn!("request: {:?}", pkt.guid);
-                let topic_state = rib_state_table.get(&pkt.gdpname);
-                info!("the current topic state is {:?}", topic_state);
-                match topic_state {
-                    Some(s) => {
-                        if s.state == TopicStateInFIB::RUNNING {
-                            for dst in &s.receivers {
-                                let _ = dst.send(pkt.clone());
+
+                match pkt.action {
+                    GdpAction::Forward => {
+                        warn!("forward????")
+                    },
+                    GdpAction::Request => {
+                        info!("received GDP request {}", pkt);
+                        warn!("request: {:?}", pkt.guid);
+                        let topic_state = rib_state_table.get(&pkt.gdpname);
+                        info!("the current topic state is {:?}", topic_state);
+                        match topic_state {
+                            Some(s) => {
+                                if s.state == TopicStateInFIB::RUNNING {
+                                    for dst in &s.receivers {
+                                        let _ = dst.send(pkt.clone());
+                                    }
+                                } else {
+                                    warn!("the current topic state is {:?}, not forwarded", topic_state)
+                                }
+                            },
+                            None => {
+                                error!("The gdpname {:?} does not exist", pkt.gdpname)
                             }
-                        } else {
-                            warn!("the current topic state is {:?}, not forwarded", topic_state)
                         }
                     },
-                    None => {
-                        error!("The gdpname {:?} does not exist", pkt.gdpname)
+                    GdpAction::Response => {
+                        info!("received GDP response {}", pkt);
+                        warn!("response: {:?}", pkt.guid);
+                        if processed_requests.contains(&pkt.guid) {
+                            warn!("the request is processed, thrown away");
+                            continue;
+                        }else{
+                            processed_requests.insert(pkt.guid);
+                            // send it back with response forwarding table 
+                            let dst = response_forwarding_table.get(&pkt.gdpname);
+                            dst.unwrap().send(pkt.clone()).unwrap();
+                        }  
+                    },
+                    _ => {
+                        error!("Unknown action {:?}", pkt.action);
+                        continue;
                     }
                 }
+                
             }
 
-            // Some(pkt) = fib_tx.recv() => {
-            //     info!("received GDP response {}", pkt);
-            //     warn!("response: {:?}", pkt.guid);
-            //     if processed_requests.contains(&pkt.guid) {
-            //         warn!("the request is processed, thrown away");
-            //         continue;
-            //     }else{
-            //         processed_requests.insert(pkt.guid);
-            //         // send it back with response forwarding table 
-            //         let dst = response_forwarding_table.get(&pkt.gdpname);
-            //         dst.unwrap().send(pkt.clone()).unwrap();
-            //     }  
-            // }
 
             // update the table
             Some(update) = channel_rx.recv() => {
