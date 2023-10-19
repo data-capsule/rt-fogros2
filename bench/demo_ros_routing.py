@@ -77,11 +77,13 @@ server_service = [
 
 addr = "localhost:3005"
 ros_topic = {
-    "api_op": "add",
+    "api_op": "routing",
     "ros_op": "source",
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
+    "forward_sender_url": "sender-source-to-dst", 
+    "forward_receiver_url": "receiver-source-to-dst"
 }
 uri = f"http://{addr}/service"
 # Create a new resource
@@ -91,11 +93,44 @@ print(response)
 
 addr = "localhost:3002"
 ros_topic = {
-    "api_op": "add",
+    "api_op": "routing",
     "ros_op": "destination",
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
+    "forward_sender_url": "sender-source-to-dst", 
+    "forward_receiver_url": "receiver-source-to-dst"
+}
+uri = f"http://{addr}/service"
+# Create a new resource
+response = requests.post(uri, json = ros_topic)
+print(response)
+
+addr = "localhost:3005"
+ros_topic = {
+    "api_op": "routing",
+    "ros_op": "source",
+    "crypto": "test_cert",
+    "topic_name": "/add_three_ints",
+    "topic_type": "bench_msgs/srv/AddThreeInts",
+    "forward_sender_url": "sender-dst-to-source", 
+    "forward_receiver_url": "receiver-dst-to-source", 
+}
+uri = f"http://{addr}/service"
+# Create a new resource
+response = requests.post(uri, json = ros_topic)
+print(response)
+
+
+addr = "localhost:3002"
+ros_topic = {
+    "api_op": "routing",
+    "ros_op": "destination",
+    "crypto": "test_cert",
+    "topic_name": "/add_three_ints",
+    "topic_type": "bench_msgs/srv/AddThreeInts",
+    "forward_sender_url": "sender-dst-to-source", 
+    "forward_receiver_url": "receiver-dst-to-source", 
 }
 uri = f"http://{addr}/service"
 # Create a new resource

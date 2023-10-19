@@ -62,7 +62,14 @@ pub async fn service_connection_fib_handler(
                             processed_requests.insert(pkt.guid);
                             // send it back with response forwarding table 
                             let dst = response_forwarding_table.get(&pkt.gdpname);
-                            dst.unwrap().send(pkt.clone()).unwrap();
+                            match dst {
+                                Some(v) => {
+                                    let _ = v.send(pkt.clone());
+                                },
+                                None => {
+                                    error!("the response channel does not exist");
+                                }
+                            }
                         }  
                     },
                     _ => {

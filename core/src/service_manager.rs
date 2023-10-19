@@ -387,7 +387,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                 // info!("ros topic manager get payload: {:?}", payload);
                 match payload.api_op.as_str() {
                     "add" => {
-
                         let topic_name = payload.topic_name;
                         let topic_type = payload.topic_type;
                         let action = payload.ros_op;
@@ -432,11 +431,69 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     certificate: certificate,
                                 };
                                 let _ = topic_operation_tx.send(topic_creator_request);
+                            }, 
+                            _ => {
+                                warn!("unknown action {}", action);
+                            }
+                        };
+                    },
+                    "routing" => {
+                        let topic_name = payload.topic_name;
+                        let topic_type = payload.topic_type;
+                        let action = payload.ros_op;
+                                                    let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                                &topic_name,
+                                &topic_type,
+                                &certificate,
+                            ));
+                            let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                                &topic_name,
+                                &topic_type,
+                                &certificate,
+                            ));
+                            
+                        match action.as_str() {
+
+                            // provide service locally and send to remote service
+                            "client" => { 
+                                let topic_name_clone = topic_name.clone();
+                                let certificate = certificate.clone();
+                                let topic_operation_tx = publisher_operation_tx.clone();
+                                // let handle = tokio::spawn(
+                                //     async move {
+                                //         create_new_local_service_caller(topic_gdp_name, topic_name_cloned, topic_type, certificate,
+                                //             topic_operation_tx).await;
+                                //     }
+                                // );
+                                // waiting_rib_handles.push(handle);
+                                let topic_creator_request = TopicManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    topic_name: topic_name_clone,
+                                    topic_type: topic_type,
+                                    certificate: certificate,
+                                };
+                                let _ = topic_operation_tx.send(topic_creator_request);
+                            }
+
+                            // provide service remotely and interact with local service, and send back
+                            "service" => {
+                                let topic_name_clone = topic_name.clone();
+                                let certificate = certificate.clone();
+                                let topic_type = topic_type.clone();
+                                let topic_operation_tx = subscriber_operation_tx.clone();
+                                let topic_creator_request = TopicManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    topic_name: topic_name_clone,
+                                    topic_type: topic_type,
+                                    certificate: certificate,
+                                };
+                                let _ = topic_operation_tx.send(topic_creator_request);
                             }
 
                             "source" => {
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                                let sender_url = "sender".to_string();
+                                // let sender_url = "sender".to_string();
+                                let sender_url = payload.forward_sender_url.unwrap();
                                 let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
                                 let fib_tx_clone = fib_tx.clone();
                                 let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
@@ -452,8 +509,10 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             "destination" => {
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 let fib_tx_clone = fib_tx.clone();
-                                let receiver_url = "receiver".to_string();
-                                let peer_dialing_url = "sender".to_string();
+                                // let receiver_url = "receiver".to_string();
+                                // let peer_dialing_url = "sender".to_string();
+                                let receiver_url = payload.forward_receiver_url.unwrap();
+                                let peer_dialing_url = payload.forward_sender_url.unwrap();
                                 let webrtc_stream =
                                     register_webrtc_stream(&receiver_url, Some(peer_dialing_url)).await;
                                 let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
@@ -469,7 +528,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 warn!("unknown action {}", action);
                             }
                         }
-                    },
+                    }
                     "del" => {
                         info!("deleting topic {:?}", payload);
                         
