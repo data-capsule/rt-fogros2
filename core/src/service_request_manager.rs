@@ -42,6 +42,7 @@ pub struct FibStateChange {
 #[derive(Debug)]
 pub struct FibConnection {
     pub state: TopicStateInFIB,
+    pub connection_type: FibConnectionType,
     tx: UnboundedSender<GDPPacket>, 
     pub description: Option<String>,
 }
@@ -91,7 +92,7 @@ pub async fn service_connection_fib_handler(
                         match topic_state {
                             Some(s) => {
                                 for dst in &s.receivers {
-                                    if dst.state == TopicStateInFIB::RUNNING {
+                                    if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUEST {
                                         let _ = dst.tx.send(pkt.clone());
                                     } else {
                                         warn!("the current topic state is {:?}, not forwarded", topic_state)
@@ -116,7 +117,7 @@ pub async fn service_connection_fib_handler(
                             match topic_state {
                                 Some(s) => {
                                     for dst in &s.receivers {
-                                        if dst.state == TopicStateInFIB::RUNNING {
+                                        if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RESPONSE {
                                             let _ = dst.tx.send(pkt.clone());
                                         } else {
                                             warn!("the current topic state is {:?}, not forwarded", topic_state)
@@ -160,6 +161,7 @@ pub async fn service_connection_fib_handler(
                                 // v.receivers.push(update.forward_destination.unwrap());
                                 v.receivers.push(FibConnection{
                                     state: TopicStateInFIB::RUNNING,
+                                    connection_type: update.connection_type,
                                     tx: update.forward_destination.unwrap(),
                                     description: update.description,
                                 });
@@ -173,6 +175,7 @@ pub async fn service_connection_fib_handler(
                                 let state = FIBState {
                                     receivers: vec!(FibConnection{
                                         state: TopicStateInFIB::RUNNING,
+                                        connection_type: update.connection_type,
                                         tx: update.forward_destination.unwrap(),
                                         description: update.description,
                                     }),

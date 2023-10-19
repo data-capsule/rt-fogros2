@@ -524,10 +524,15 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     register_webrtc_stream(&receiver_url, Some(peer_dialing_url)).await;
                                 let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
                                 waiting_rib_handles.push(rtc_handle);
+                                let connection_type = match payload.connection_type.unwrap().as_str() {
+                                    "request" => FibConnectionType::REQUEST,
+                                    "response" => FibConnectionType::RESPONSE,
+                                    _ => FibConnectionType::BIDIRECTIONAL,
+                                };
                                 let channel_update_msg = FibStateChange {
                                     action: FibChangeAction::ADD,
                                     topic_gdp_name: topic_gdp_name,
-                                    connection_type: FibConnectionType::REQUEST, //TODO
+                                    connection_type: connection_type, //TODO
                                     forward_destination: Some(local_to_rtc_tx),
                                     description: Some("webrtc stream".to_string()),
                                 };

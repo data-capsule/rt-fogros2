@@ -82,6 +82,7 @@ ros_topic = {
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
+    "connection_type": "request",
     "forward_sender_url": "sender-source-to-dst", 
     "forward_receiver_url": "receiver-source-to-dst"
 }
@@ -98,6 +99,7 @@ ros_topic = {
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
+    "connection_type": "request",
     "forward_sender_url": "sender-source-to-dst", 
     "forward_receiver_url": "receiver-source-to-dst"
 }
@@ -113,6 +115,7 @@ ros_topic = {
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
+    "connection_type": "response",
     "forward_sender_url": "sender-dst-to-source", 
     "forward_receiver_url": "receiver-dst-to-source", 
 }
@@ -128,6 +131,7 @@ ros_topic = {
     "crypto": "test_cert",
     "topic_name": "/add_three_ints",
     "topic_type": "bench_msgs/srv/AddThreeInts",
+    "connection_type": "response",
     "forward_sender_url": "sender-dst-to-source", 
     "forward_receiver_url": "receiver-dst-to-source", 
 }

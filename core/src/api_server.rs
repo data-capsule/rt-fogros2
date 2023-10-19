@@ -18,6 +18,8 @@ pub struct ROSTopicRequest {
     pub crypto: String,
     pub topic_name: String,
     pub topic_type: String,
+    // these are for routing
+    pub connection_type: Option<String>,
     pub forward_sender_url: Option<String>,
     pub forward_receiver_url: Option<String>,
 }
