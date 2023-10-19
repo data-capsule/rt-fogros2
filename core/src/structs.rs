@@ -17,6 +17,8 @@ pub enum GdpAction {
     RibReply = 5,
     Nack = 6,
     Control = 7,
+    Request = 8,
+    Response = 9,
 }
 
 impl Default for GdpAction {

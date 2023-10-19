@@ -4,7 +4,7 @@ use crate::connection_fib::connection_fib_handler;
 #[cfg(feature = "ros")]
 use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
 
-use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_forward_with_guid};
+use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_request_with_guid, construct_gdp_response_with_guid};
 use crate::service_request_manager::{service_connection_fib_handler};
 use crate::structs::{
     gdp_name_to_string, generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GdpAction,
@@ -174,7 +174,7 @@ pub async fn ros_topic_remote_service_provider(
                                     let guid = format!("{:?}", req.request_id);
                                     info!("received a ROS request {:?}", guid);
                                     let packet_guid = generate_gdp_name_from_string(&guid); 
-                                    let packet = construct_gdp_forward_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&req.message).unwrap(), packet_guid );
+                                    let packet = construct_gdp_request_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&req.message).unwrap(), packet_guid );
                                     info!("sending to webrtc {:?}", packet);
                                     request_tx.send(packet).expect("send for ros subscriber failure");
                                     tokio::select! {
@@ -310,7 +310,7 @@ pub async fn ros_topic_local_service_caller(
                                     info!("the response is {:?}", resp);
                                     //send back the response to the rtc
                                     let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id)); 
-                                    let packet = construct_gdp_forward_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&resp.unwrap().unwrap()).unwrap(), packet_guid);
+                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&resp.unwrap().unwrap()).unwrap(), packet_guid);
                                     fib_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{
                                     info!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);

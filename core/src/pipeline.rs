@@ -18,11 +18,24 @@ pub fn construct_gdp_forward_from_bytes(
 
 /// construct gdp struct from bytes
 /// bytes is put as payload
-pub fn construct_gdp_forward_with_guid(
+// pub fn construct_gdp_forward_with_guid(
+//     destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
+// ) -> GDPPacket {
+//     GDPPacket {
+//         action: GdpAction::Forward,
+//         gdpname: destination,
+//         payload: Some(buffer),
+//         source: source,
+//         guid: Some(guid),
+//         name_record: None,
+//     }
+// }
+
+pub fn construct_gdp_request_with_guid(
     destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
 ) -> GDPPacket {
     GDPPacket {
-        action: GdpAction::Forward,
+        action: GdpAction::Request,
         gdpname: destination,
         payload: Some(buffer),
         source: source,
@@ -30,6 +43,36 @@ pub fn construct_gdp_forward_with_guid(
         name_record: None,
     }
 }
+
+pub fn construct_gdp_response_with_guid(
+    destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
+) -> GDPPacket {
+    GDPPacket {
+        action: GdpAction::Response,
+        gdpname: destination,
+        payload: Some(buffer),
+        source: source,
+        guid: Some(guid),
+        name_record: None,
+    }
+}
+
+
+pub fn construct_gdp_packet_with_guid(
+    action: GdpAction, 
+    destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
+) -> GDPPacket {
+    GDPPacket {
+        action: action,
+        gdpname: destination,
+        payload: Some(buffer),
+        source: source,
+        guid: Some(guid),
+        name_record: None,
+    }
+}
+
+
 
 /// construct gdp struct from bytes
 /// bytes is put as payload

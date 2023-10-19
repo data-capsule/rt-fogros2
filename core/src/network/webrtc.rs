@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_forward_with_guid};
+use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_packet_with_guid};
 use crate::structs::GDPHeaderInTransit;
 use crate::structs::{generate_random_gdp_name, GDPName};
 use crate::structs::{GDPPacket, GdpAction, Packet};
@@ -257,25 +257,11 @@ pub async fn webrtc_reader_and_writer(
 
                     info!("the total received payload with size {:} with gdp header length {}",  payload.len(), header.length);
 
-                    if deserialized.action == GdpAction::Forward {
-                        // let packet = construct_gdp_forward_from_bytes(deserialized.destination, thread_name, payload);
-                        let packet = construct_gdp_forward_with_guid(deserialized.destination, thread_name, payload, deserialized.guid);
+                    let packet = construct_gdp_packet_with_guid(deserialized.action, deserialized.destination,  thread_name, payload, deserialized.guid);
                         match ros_tx.send(packet) {
                             Ok(_) => {},
                             Err(_) => {warn!("request is being handled by another connection");},
                         }
-
-                        // proc_gdp_packet(packet,  // packet
-                        //     &fib_tx,  //used to send packet to fib
-                        //     &channel_tx, // used to send GDPChannel to fib
-                        //     &m_tx, //the sending handle of this connection
-                        //     &rib_query_tx,
-                        //     "".to_string(),
-                        // ).await;
-                    }
-                    else{
-                        info!("WebRTC received a packet but did not handle: {:?}", deserialized)
-                    }
                 }
 
                 match processed_remaining_header {
