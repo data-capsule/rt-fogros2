@@ -106,7 +106,7 @@ uri = f"http://{addr}/service"
 response = requests.post(uri, json = ros_topic)
 print(response)
 
-addr = "localhost:3005"
+addr = "localhost:3002"
 ros_topic = {
     "api_op": "routing",
     "ros_op": "source",
@@ -122,7 +122,7 @@ response = requests.post(uri, json = ros_topic)
 print(response)
 
 
-addr = "localhost:3002"
+addr = "localhost:3005"
 ros_topic = {
     "api_op": "routing",
     "ros_op": "destination",
