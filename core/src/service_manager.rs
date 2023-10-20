@@ -448,6 +448,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         };
                     },
                     "routing" => {
+                        info!("adding routing {:?}", payload);
                         let topic_name = payload.topic_name;
                         let topic_type = payload.topic_type;
                         let action = payload.ros_op;
@@ -456,47 +457,12 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 &topic_type,
                                 &certificate,
                             ));
-                            
+                        
                         match action.as_str() {
-
-                            // provide service locally and send to remote service
-                            "client" => { 
-                                let topic_name_clone = topic_name.clone();
-                                let certificate = certificate.clone();
-                                let topic_operation_tx = publisher_operation_tx.clone();
-                                // let handle = tokio::spawn(
-                                //     async move {
-                                //         create_new_local_service_caller(topic_gdp_name, topic_name_cloned, topic_type, certificate,
-                                //             topic_operation_tx).await;
-                                //     }
-                                // );
-                                // waiting_rib_handles.push(handle);
-                                let topic_creator_request = TopicManagerRequest {
-                                    action: TopicManagerAction::ADD,
-                                    topic_name: topic_name_clone,
-                                    topic_type: topic_type,
-                                    certificate: certificate,
-                                };
-                                let _ = topic_operation_tx.send(topic_creator_request);
-                            }
-
-                            // provide service remotely and interact with local service, and send back
-                            "service" => {
-                                let topic_name_clone = topic_name.clone();
-                                let certificate = certificate.clone();
-                                let topic_type = topic_type.clone();
-                                let topic_operation_tx = subscriber_operation_tx.clone();
-                                let topic_creator_request = TopicManagerRequest {
-                                    action: TopicManagerAction::ADD,
-                                    topic_name: topic_name_clone,
-                                    topic_type: topic_type,
-                                    certificate: certificate,
-                                };
-                                let _ = topic_operation_tx.send(topic_creator_request);
-                            }
 
                             // source: fib -> webrtc 
                             "source" => {
+                                
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 // let sender_url = "sender".to_string();
                                 let sender_url = payload.forward_sender_url.unwrap();
@@ -527,6 +493,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
 
                             // destination: webrtc -> fib
                             "destination" => {
+                                // info!("adding routing dst {:?}", payload);
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 let fib_tx_clone = fib_tx.clone();
                                 // let receiver_url = "receiver".to_string();

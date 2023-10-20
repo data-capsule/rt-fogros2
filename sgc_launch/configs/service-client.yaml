@@ -6,6 +6,7 @@ services:
     service_type: bench_msgs/srv/AddThreeInts
 
 state_machine: 
+  standby: 
   client: 
     services:
       - /add_three_ints: client 
@@ -16,3 +17,4 @@ state_machine:
 assignment:
   machine_client: client
   machine_server: server
+  machine_switch: standby

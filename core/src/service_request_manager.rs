@@ -68,8 +68,6 @@ pub async fn service_connection_fib_handler(
 ) {
     let mut rib_state_table: HashMap<GDPName, FIBState> = HashMap::new();
 
-    let mut response_forwarding_table: HashMap<GDPName, UnboundedSender<GDPPacket>> = HashMap::new();
-
     let mut processed_requests = HashSet::new();
 
     loop {
