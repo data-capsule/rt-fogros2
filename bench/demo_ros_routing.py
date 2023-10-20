@@ -121,6 +121,9 @@ root:
   address: {client}
   is_compute: true
   children:
+  - address: {switch}
+    is_compute: true
+    children:
     - address: {server}
       is_compute: true
 '''
