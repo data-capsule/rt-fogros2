@@ -93,7 +93,7 @@ pub async fn service_connection_fib_handler(
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUEST {
                                         let _ = dst.tx.send(pkt.clone());
                                     } else {
-                                        warn!("the current topic state is {:?}, not forwarded", topic_state)
+                                        warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
                                     }
                                 }
                             },
@@ -118,7 +118,7 @@ pub async fn service_connection_fib_handler(
                                         if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RESPONSE {
                                             let _ = dst.tx.send(pkt.clone());
                                         } else {
-                                            warn!("the current topic state is {:?}, not forwarded", topic_state)
+                                            warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
                                         }
                                     }
                                 },

@@ -163,14 +163,14 @@ pub async fn register_webrtc_stream(my_id: &str, peer_to_dial: Option<String>) -
     tokio::spawn(f_read);
     let stream = if peer_to_dial.is_some() {
         // here we are the initiator
-        info!("dialing");
+        info!("my id {:?}, dialing {:?}", my_id, peer_to_dial.clone());
         let dc = listener.dial("whatever").await.unwrap();
         info!("dial succeed");
 
         // dc.write_all(b"Ping").await.unwrap();
         dc
     } else {
-        info!("accepting");
+        info!("my id {:?}, accepting", my_id);
         let dc = listener.accept().await.unwrap();
         info!("accept succeed");
         dc
