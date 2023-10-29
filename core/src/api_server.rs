@@ -13,11 +13,15 @@ use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ROSTopicRequest {
-    pub api_op: String, // add | del
-    pub ros_op: String, // pub | sub | noop
+    pub api_op: String, // add | del | routing
+    pub ros_op: String, // pub | sub | service | client || source | destination
     pub crypto: String,
     pub topic_name: String,
     pub topic_type: String,
+    // these are for routing
+    pub connection_type: Option<String>,
+    pub forward_sender_url: Option<String>,
+    pub forward_receiver_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
