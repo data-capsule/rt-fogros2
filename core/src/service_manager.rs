@@ -181,7 +181,7 @@ pub async fn ros_topic_remote_service_provider(
                                     let guid = format!("{:?}", req.request_id);
                                     info!("received a ROS request {:?}", guid);
                                     let packet_guid = generate_gdp_name_from_string(&guid); 
-                                    let packet = construct_gdp_request_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&req.message).unwrap(), packet_guid );
+                                    let packet = construct_gdp_request_with_guid(topic_gdp_name, topic_gdp_name, req.message.clone(), packet_guid );
                                     info!("sending to webrtc {:?}", packet);
                                     request_tx.send(packet).expect("send for ros subscriber failure");
                                     tokio::select! {
@@ -192,8 +192,9 @@ pub async fn ros_topic_remote_service_provider(
                                             
                                             info!("received from webrtc in ros_rx {:?}", packet);
                                             let mut respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
-                                            let respond_msg_in_json = serde_json::from_str(str::from_utf8(&packet.payload.unwrap()).unwrap()).expect("json parsing failure");
-                                            respond_msg.from_json(respond_msg_in_json).unwrap();
+                                            // let respond_msg_in_json = &packet.payload.unwrap();
+                                            respond_msg.from_binary(packet.payload.unwrap()); //.unwrap();
+                                            info!("the decoded payload to publish is {:?}", respond_msg);
                                             req.respond(respond_msg).expect("could not send service response");
                                         }, 
                                         // timeout after 1 second 
@@ -314,13 +315,13 @@ pub async fn ros_topic_local_service_caller(
                                 info!("new payload to publish {:?}", pkt_to_forward.guid);
                                 if pkt_to_forward.gdpname == topic_gdp_name {
                                     let payload = pkt_to_forward.get_byte_payload().unwrap();
-                                    let ros_msg = serde_json::from_str(str::from_utf8(payload).unwrap()).expect("json parsing failure");
-                                    info!("the decoded payload to publish is {:?}", ros_msg);
-                                    let mut resp = untyped_client.request(ros_msg).expect("service call failure").await;
+                                    let ros_msg = payload;
+                                    info!("the request payload to publish is {:?}", ros_msg);
+                                    let mut resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await;
                                     info!("the response is {:?}", resp);
                                     //send back the response to the rtc
                                     let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id)); 
-                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, topic_gdp_name, serde_json::to_vec(&resp.unwrap().unwrap()).unwrap(), packet_guid);
+                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, topic_gdp_name, resp.unwrap().unwrap().to_vec(), packet_guid);
                                     fib_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{
                                     warn!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
