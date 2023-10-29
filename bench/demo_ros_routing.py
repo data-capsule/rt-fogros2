@@ -6,8 +6,11 @@ switch = "localhost:3003"
 server = "localhost:3002"
 client = "localhost:3005"
 
-
 def send_routing_request(addr, source_or_destination, sender_url, receiver_url, connection_type):
+    send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type)
+    send_routing_request_topic(addr, source_or_destination, sender_url, receiver_url, connection_type)
+
+def send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type):
     sha = hashlib.sha256()
     sha.update(sender_url.encode())
     sender_url = sha.hexdigest()
@@ -31,6 +34,30 @@ def send_routing_request(addr, source_or_destination, sender_url, receiver_url, 
     print(response)
     sleep(1)
 
+
+def send_routing_request_topic(addr, source_or_destination, sender_url, receiver_url, connection_type):
+    sha = hashlib.sha256()
+    sha.update(sender_url.encode())
+    sender_url = sha.hexdigest()
+    sha = hashlib.sha256()
+    sha.update(receiver_url.encode())
+    receiver_url = sha.hexdigest()
+    ros_topic = {
+        "api_op": "routing",
+        "ros_op": source_or_destination,
+        "crypto": "test_cert",
+        "topic_name": "/add_three_ints",
+        "topic_type": "bench_msgs/srv/AddThreeInts",
+        "connection_type": connection_type,
+        "forward_sender_url": sender_url, 
+        "forward_receiver_url": receiver_url
+    }
+    print(addr, ros_topic)
+    uri = f"http://{addr}/topic"
+    # Create a new resource
+    response = requests.post(uri, json = ros_topic)
+    print(response)
+    sleep(1)
 
 class Node:
     def __init__(self, address, is_compute=False, parent=None):
