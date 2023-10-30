@@ -696,6 +696,8 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let connection_type = match payload.connection_type.unwrap().as_str() {
                                     "request" => FibConnectionType::REQUEST,
                                     "response" => FibConnectionType::RESPONSE,
+                                    "pub" => FibConnectionType::RECEIVER,
+                                    "sub" => FibConnectionType::SENDER,
                                     _ => FibConnectionType::BIDIRECTIONAL,
                                 };
                                 let channel_update_msg = FibStateChange {

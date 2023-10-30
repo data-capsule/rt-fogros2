@@ -83,7 +83,7 @@ pub async fn service_connection_fib_handler(
                         match topic_state {
                             Some(s) => {
                                 for dst in &s.receivers {
-                                    if dst.state == TopicStateInFIB::RUNNING {
+                                    if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
                                         let _ = dst.tx.send(pkt.clone());
                                     } else {
                                         warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);

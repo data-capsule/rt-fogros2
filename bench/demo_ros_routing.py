@@ -6,9 +6,9 @@ switch = "localhost:3003"
 server = "localhost:3002"
 client = "localhost:3005"
 
-def send_routing_request(addr, source_or_destination, sender_url, receiver_url, connection_type):
-    # send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type)
-    send_routing_request_topic(addr, source_or_destination, sender_url, receiver_url, connection_type)
+# def send_routing_request(addr, source_or_destination, sender_url, receiver_url, connection_type):
+#     send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type)
+#     send_routing_request_topic(addr, source_or_destination, sender_url, receiver_url, connection_type)
 
 def send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type):
     sha = hashlib.sha256()
@@ -83,20 +83,20 @@ def print_tree(node, level=0):
         print_tree(child, level + 1)
 
 
-def construct_tree_by_sending_request(node):
+def construct_tree_by_sending_request_service(node):
     for child in node.children:
         # uniquely identify the session
         session_id = node.address + child.address
 
         # establish request channel from node to child
-        send_routing_request(
+        send_routing_request_service(
             node.address,
             "source",
             "request" + node.address + session_id,
             "request" + child.address + session_id,
             "request"
         )
-        send_routing_request(
+        send_routing_request_service(
             child.address,
             "destination",
             "request" + node.address + session_id,
@@ -105,21 +105,43 @@ def construct_tree_by_sending_request(node):
         )
 
         # establish response channel from child to node
-        send_routing_request(
+        send_routing_request_service(
             child.address,
             "source",
             "response" + child.address + session_id,
             "response" + node.address + session_id,
             "response"
         )
-        send_routing_request(
+        send_routing_request_service(
             node.address,
             "destination",
             "response" + child.address + session_id,
             "response" + node.address + session_id,
             "response"
         )
-        construct_tree_by_sending_request(child)
+        construct_tree_by_sending_request_service(child)
+
+def construct_tree_by_sending_request_topic(node):
+    for child in node.children:
+        # uniquely identify the session
+        session_id = node.address + child.address
+
+        # establish request channel from node to child
+        send_routing_request_topic(
+            node.address,
+            "source",
+            "topic" + node.address + session_id,
+            "topic" + child.address + session_id,
+            "pub"
+        )
+        send_routing_request_topic(
+            child.address,
+            "destination",
+            "topic" + node.address + session_id,
+            "topic" + child.address + session_id,
+            "pub"
+        )
+        construct_tree_by_sending_request_topic(child)
 
 
 with open("topology.yaml") as f:
@@ -132,4 +154,4 @@ yaml_dict = yaml.safe_load(yaml_str)
 root_dict = yaml_dict['root']
 root_node = build_tree(root_dict)
 print_tree(root_node)
-construct_tree_by_sending_request(root_node)
+construct_tree_by_sending_request_topic(root_node)
