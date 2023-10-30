@@ -373,22 +373,22 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     });
     waiting_rib_handles.push(fib_handle);
 
-    let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
+    let (client_operation_tx, client_operation_rx) = mpsc::unbounded_channel();
     let channel_tx_clone = channel_tx.clone();
     let fib_tx_clone = fib_tx.clone();
     let topic_creator_handle = tokio::spawn(async move {
-        ros_topic_remote_service_provider(publisher_operation_rx, fib_tx_clone, channel_tx_clone).await;
+        ros_topic_remote_service_provider(client_operation_rx, fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
 
-    let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
+    let (service_operation_tx, service_operation_rx) = mpsc::unbounded_channel();
     let channel_tx_clone = channel_tx.clone();
     let fib_tx_clone = fib_tx.clone();
     let topic_creator_handle = tokio::spawn(async move {
         // This is because the ROS node creation is not thread safe 
         // See: https://github.com/ros2/rosbag2/issues/329
         std::thread::sleep(std::time::Duration::from_millis(500));
-        ros_topic_local_service_caller(subscriber_operation_rx,  fib_tx_clone, channel_tx_clone).await;
+        ros_topic_local_service_caller(service_operation_rx,  fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
 
@@ -412,7 +412,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             "client" => { 
                                 let topic_name_clone = topic_name.clone();
                                 let certificate = certificate.clone();
-                                let topic_operation_tx = publisher_operation_tx.clone();
+                                let topic_operation_tx = client_operation_tx.clone();
                                 // let handle = tokio::spawn(
                                 //     async move {
                                 //         create_new_local_service_caller(topic_gdp_name, topic_name_cloned, topic_type, certificate,
@@ -434,7 +434,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_name_clone = topic_name.clone();
                                 let certificate = certificate.clone();
                                 let topic_type = topic_type.clone();
-                                let topic_operation_tx = subscriber_operation_tx.clone();
+                                let topic_operation_tx = service_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
                                     action: TopicManagerAction::ADD,
                                     topic_name: topic_name_clone,
@@ -517,7 +517,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         
                     //     match payload.ros_op.as_str() {
                     //         "pub" => {
-                    //             let topic_operation_tx = publisher_operation_tx.clone();
+                    //             let topic_operation_tx = client_operation_tx.clone();
                     //             let topic_creator_request = TopicManagerRequest {
                     //                 action: TopicManagerAction::DELETE,
                     //                 topic_name: payload.topic_name,
@@ -528,7 +528,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
 
                     //         }, 
                     //         "sub" => {
-                    //             let topic_operation_tx = subscriber_operation_tx.clone();
+                    //             let topic_operation_tx = service_operation_tx.clone();
                     //             let topic_creator_request = TopicManagerRequest {
                     //                 action: TopicManagerAction::DELETE,
                     //                 topic_name: payload.topic_name,
@@ -547,7 +547,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         
                     //     match payload.ros_op.as_str() {
                     //         "pub" => {
-                    //             let topic_operation_tx = publisher_operation_tx.clone();
+                    //             let topic_operation_tx = client_operation_tx.clone();
                     //             let topic_creator_request = TopicManagerRequest {
                     //                 action: TopicManagerAction::RESUME,
                     //                 topic_name: payload.topic_name,
@@ -558,7 +558,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
 
                     //         }, 
                     //         "sub" => {
-                    //             let topic_operation_tx = subscriber_operation_tx.clone();
+                    //             let topic_operation_tx = service_operation_tx.clone();
                     //             let topic_creator_request = TopicManagerRequest {
                     //                 action: TopicManagerAction::RESUME,
                     //                 topic_name: payload.topic_name,
