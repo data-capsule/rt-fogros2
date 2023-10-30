@@ -9,6 +9,59 @@ import rclpy.node
 from rcl_interfaces.msg import SetParametersResult
 from sgc_msgs.srv import SgcAssignment
 from sgc_msgs.msg import AssignmentUpdate
+import hashlib
+
+logger = None 
+
+def send_routing_request_service(addr,topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
+    sha = hashlib.sha256()
+    sha.update(sender_url.encode())
+    sender_url = sha.hexdigest()
+    sha = hashlib.sha256()
+    sha.update(receiver_url.encode())
+    receiver_url = sha.hexdigest()
+    ros_topic = {
+        "api_op": "routing",
+        "ros_op": source_or_destination,
+        "crypto": "test_cert",
+        "topic_name": topic_name,
+        "topic_type": topic_type,
+        "connection_type": connection_type,
+        "forward_sender_url": sender_url, 
+        "forward_receiver_url": receiver_url
+    }
+    print(addr, ros_topic)
+    uri = f"http://{addr}/service"
+    # Create a new resource
+    response = requests.post(uri, json = ros_topic)
+    print(response)
+    sleep(1)
+
+
+def send_routing_request_topic(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
+    sha = hashlib.sha256()
+    sha.update(sender_url.encode())
+    sender_url = sha.hexdigest()
+    sha = hashlib.sha256()
+    sha.update(receiver_url.encode())
+    receiver_url = sha.hexdigest()
+    ros_topic = {
+        "api_op": "routing",
+        "ros_op": source_or_destination,
+        "crypto": "test_cert",
+        "topic_name": topic_name,
+        "topic_type": topic_type,
+        "connection_type": connection_type,
+        "forward_sender_url": sender_url, 
+        "forward_receiver_url": receiver_url
+    }
+    print(addr, ros_topic)
+    uri = f"http://{addr}/topic"
+    # Create a new resource
+    response = requests.post(uri, json = ros_topic)
+    print(response)
+    sleep(1)
+
 
 def send_topic_request(
     api_op, 
@@ -50,6 +103,50 @@ def send_service_request(
     # print(f"topic {topic.name} with operation {api_op} request sent with response {response}")
 
 
+
+class Node:
+    def __init__(self, address, parent=None):
+        self.address = address
+        self.children = []
+        self.parent = parent
+
+def build_mcast_tree(node_dict, parent=None):
+    address = node_dict.get("address")
+    node = Node(address, parent)
+    
+    for child_dict in node_dict.get("children", []):
+        child_node = build_mcast_tree(child_dict, node)
+        node.children.append(child_node)
+    
+    return node
+
+
+class Node:
+    def __init__(self, address,  parent=None):
+        self.address = address
+        self.children = []
+        self.parent = parent
+
+def build_tree(node_dict, parent=None):
+    if isinstance(node_dict, str):
+        return Node(node_dict, parent)
+    logger.info(f"node dict {node_dict}")
+    address = list(node_dict.keys())[0] # only one key, because its a tree
+    node = Node(address, parent)
+    
+    logger.info(f"{node_dict[address]['children']}")
+    for child_dict in node_dict[address]['children']:
+        child_node = build_tree(child_dict, node)
+        node.children.append(child_node)
+    
+    return node
+
+def print_tree(node, level=0):
+    print("  " * level + f"{node.address}")
+    for child in node.children:
+        print_tree(child, level + 1)
+
+
 class SGC_StateMachine: 
     def __init__(self, state_name, topic_dict, param_dict, service_dict):
         self.state_name = state_name
@@ -87,17 +184,20 @@ class SGC_Swarm:
         self._paused_services = []
 
         self.logger = logger
+        self.config = None
         
         self.load(yaml_config)
 
     def load(self, yaml_config):
         with open(yaml_config, "r") as f:
             config = yaml.safe_load(f)
+            self.config = config 
             self.logger.info(f"The config file is \n {pprint.pformat(config)}")
         self._load_addresses(config)
         self._load_identifiers(config)
         self._load_services(config)
         self._load_topics(config)
+        # print_tree(build_tree(config["topology"]))
         self._load_state_machine(config)
         
     '''
@@ -136,6 +236,7 @@ class SGC_Swarm:
                         else:
                             self.logger.warn(f"adding topic {topic_name} to SGC router")
                             send_topic_request("add", topic_action, topic_name, topic_type, self.sgc_address)
+                            #self.construct_tree_by_sending_request_topic(build_tree(self.config["topology"]), topic_name, topic_type)
 
                 # add in new services 
                 if self.state_dict[current_state].services:
@@ -151,6 +252,7 @@ class SGC_Swarm:
                         else:
                             self.logger.warn(f"adding service {service_name} to SGC router")
                             send_service_request("add", service_action, service_name, service_type, self.sgc_address)
+                            # self.construct_tree_by_sending_request_service(build_tree(self.config["topology"]), topic_name, topic_type)
 
                 self.assignment_dict[machine] = new_assignment_dict[machine]
             else:
@@ -212,7 +314,85 @@ class SGC_Swarm:
                 continue 
             self.assignment_dict[identity_name] = state_name
         return self.assignment_dict
+    
+    def construct_tree_by_sending_request_service(self, node, topic_name, topic_type):
+        for child in node.children:
+            # uniquely identify the session
+            session_id = node.address + child.address
 
+            if node.address == self.instance_identifer:
+                # establish request channel from node to child
+                send_routing_request_service(
+                    self.sgc_address,
+                    topic_name, 
+                    topic_type,
+                    "source",
+                    "request" + node.address + session_id,
+                    "request" + child.address + session_id,
+                    "request"
+                )
+
+                send_routing_request_service(
+                    self.sgc_address,
+                    topic_name, 
+                    topic_type,
+                    "destination",
+                    "response" + child.address + session_id,
+                    "response" + node.address + session_id,
+                    "response"
+                )
+
+            if child.address == self.instance_identifer:
+                # establish response channel from child to node
+                send_routing_request_service(
+                    self.sgc_address,
+                    topic_name, 
+                    topic_type,
+                    "destination",
+                    "request" + node.address + session_id,
+                    "request" + child.address + session_id,
+                    "request"
+                )
+                
+                send_routing_request_service(
+                    self.sgc_address,
+                    topic_name, 
+                    topic_type,
+                    "source",
+                    "response" + child.address + session_id,
+                    "response" + node.address + session_id,
+                    "response"
+                )
+
+            self.construct_tree_by_sending_request_service(child, topic_name, topic_type)
+
+
+    def construct_tree_by_sending_request_topic(self, node, topic_name, topic_type):
+        for child in node.children:
+            # uniquely identify the session
+            session_id = node.address + child.address
+
+            if node.address == self.instance_identifer:
+                # establish request channel from node to child
+                send_routing_request_topic(
+                    self.sgc_address,
+                    topic_name, 
+                    topic_type,
+                    "source",
+                    "topic" + node.address + session_id,
+                    "topic" + child.address + session_id,
+                    "pub"
+                )
+            if child.address == self.instance_identifer:
+                send_routing_request_topic(
+                self.sgc_address,
+                "destination",
+                "topic" + node.address + session_id,
+                "topic" + child.address + session_id,
+                "pub"
+                )
+
+            self.construct_tree_by_sending_request_topic(child, topic_name, topic_type)
 
     # phase 1: only allow changing the state on state machine 
     # TODO: allowing changing the state machine (not a must)
@@ -224,6 +404,8 @@ class SGC_Router_Node(rclpy.node.Node):
     def __init__(self):
         super().__init__('sgc_launch_node')
         self.logger = self.get_logger()
+        global logger 
+        logger = self.logger
 
         self.declare_parameter("whoami", "")
         self.whoami = self.get_parameter("whoami").value
