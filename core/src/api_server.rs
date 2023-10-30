@@ -42,6 +42,7 @@ async fn root() -> &'static str {
     "Hello, World!"
 }
 
+#[allow(dead_code)]
 #[axum_macros::debug_handler]
 // basic handler that responds with a static string
 async fn handle_ros_topic(

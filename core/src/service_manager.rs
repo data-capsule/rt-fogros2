@@ -1,5 +1,5 @@
 use crate::api_server::ROSTopicRequest;
-use crate::connection_fib::connection_fib_handler;
+
 
 #[cfg(feature = "ros")]
 use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
@@ -7,12 +7,12 @@ use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
 use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_request_with_guid, construct_gdp_response_with_guid};
 use crate::service_request_manager::{service_connection_fib_handler, FibConnectionType};
 use crate::structs::{
-    gdp_name_to_string, generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GdpAction,
+    get_gdp_name_from_topic, GDPName, GdpAction,
     Packet, generate_gdp_name_from_string, GDPPacket,
 };
 
 use crate::service_request_manager::{FibChangeAction, FibStateChange};
-use hyper::client::connect::Connect;
+
 use serde::{Deserialize, Serialize};
 
 use std::env;
@@ -22,14 +22,14 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::str;
 
 
-use crate::db::*;
+
 use futures::{StreamExt};
-use redis_async::{client, resp::FromResp};
+
 
 use tokio::sync::mpsc::{self};
 
 use tokio::time::Duration;
-use byteorder::{ByteOrder, LittleEndian};
+
 
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
@@ -54,8 +54,8 @@ pub struct TopicManagerRequest {
 // ROS service(provider) -> webrtc (publish remotely); webrtc -> local service client
 pub async fn ros_topic_remote_service_provider(
     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    mut fib_tx : UnboundedSender<GDPPacket>,
-    mut channel_tx: UnboundedSender<FibStateChange>,
+    fib_tx : UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>,
 ) {
     let mut join_handles = vec![];
 
@@ -158,7 +158,7 @@ pub async fn ros_topic_remote_service_provider(
                                             // service.send_response(msg).await.expect("send for ros subscriber failure");
                                             
                                             info!("received from webrtc in ros_rx {:?}", packet);
-                                            let mut respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
+                                            let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             // let respond_msg_in_json = &packet.payload.unwrap();
                                             respond_msg.from_binary(packet.payload.unwrap()); //.unwrap();
                                             info!("the decoded payload to publish is {:?}", respond_msg);
@@ -167,7 +167,7 @@ pub async fn ros_topic_remote_service_provider(
                                         // timeout after 1 second 
                                         _ = tokio::time::sleep(Duration::from_millis(1000)) => {
                                             error!("timeout for ros_rx");
-                                            let mut respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
+                                            let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             req.respond(respond_msg).expect("could not send service response");
                                         }
                                     }
@@ -189,8 +189,8 @@ pub async fn ros_topic_remote_service_provider(
 // webrtc -> sgc_local_service_caller (call the service locally) -> webrtc
 pub async fn ros_topic_local_service_caller(
     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    mut fib_tx : UnboundedSender<GDPPacket>,
-    mut channel_tx: UnboundedSender<FibStateChange>,
+    fib_tx : UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>,
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
     let mut join_handles = vec![];
@@ -284,7 +284,7 @@ pub async fn ros_topic_local_service_caller(
                                     let payload = pkt_to_forward.get_byte_payload().unwrap();
                                     let ros_msg = payload;
                                     info!("the request payload to publish is {:?}", ros_msg);
-                                    let mut resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await;
+                                    let resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await;
                                     info!("the response is {:?}", resp);
                                     //send back the response to the rtc
                                     let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id)); 
@@ -313,8 +313,8 @@ pub async fn ros_topic_local_service_caller(
 // local ROS topic(provider) -> webrtc (publish remotely)
 pub async fn ros_topic_remote_publisher(
     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    mut fib_tx : UnboundedSender<GDPPacket>,
-    mut channel_tx: UnboundedSender<FibStateChange>,
+    fib_tx : UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>,
 ) {
     let mut join_handles = vec![];
 
@@ -361,7 +361,7 @@ pub async fn ros_topic_remote_publisher(
                 );
 
                 // ROS subscriber -> FIB -> RTC
-                let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
+                let (ros_tx, _ros_rx) = mpsc::unbounded_channel();
 
                 if existing_topics.contains(&topic_gdp_name) {
                     info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
@@ -411,8 +411,8 @@ pub async fn ros_topic_remote_publisher(
 // webrtc -> ros topic locally 
 pub async fn ros_topic_remote_subscriber(
     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    mut fib_tx : UnboundedSender<GDPPacket>,
-    mut channel_tx: UnboundedSender<FibStateChange>,
+    fib_tx : UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>,
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
     let mut join_handles = vec![];
@@ -443,7 +443,7 @@ pub async fn ros_topic_remote_subscriber(
                 let topic_type = request.topic_type;
                 let action = request.action;
                 let certificate = request.certificate;
-                let fib_tx = fib_tx.clone();
+                let _fib_tx = fib_tx.clone();
                 let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                     &topic_name,
                     &topic_type,
@@ -713,7 +713,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             // destination: webrtc -> fib
                             "destination" => {
                                 // info!("adding routing dst {:?}", payload);
-                                let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                                let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 let fib_tx_clone = fib_tx.clone();
                                 // let receiver_url = "receiver".to_string();
                                 // let peer_dialing_url = "sender".to_string();
