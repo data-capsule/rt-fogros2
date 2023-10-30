@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::pipeline::{construct_gdp_packet_with_guid};
+use crate::pipeline::construct_gdp_packet_with_guid;
 use crate::structs::GDPHeaderInTransit;
 use crate::structs::{generate_random_gdp_name, GDPName};
 use crate::structs::{GDPPacket, GdpAction, Packet};

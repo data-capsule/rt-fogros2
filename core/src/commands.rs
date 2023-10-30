@@ -13,7 +13,6 @@ use utils::error::Result;
 /// TODO: later put to another file
 #[tokio::main]
 async fn router_async_loop() {
-
     let (topic_request_tx, topic_request_rx) = mpsc::unbounded_channel();
 
     let (service_request_tx, service_request_rx) = mpsc::unbounded_channel();
@@ -27,7 +26,7 @@ async fn router_async_loop() {
         std::thread::sleep(std::time::Duration::from_millis(1000));
         ros_service_manager(service_request_rx).await;
     });
-        
+
     future_handles.push(ros_service_manager_handle);
 
 

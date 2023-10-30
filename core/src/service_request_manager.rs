@@ -1,19 +1,17 @@
-use crate::{
-    structs::{GDPName, GDPPacket, GdpAction},
-};
+use crate::structs::{GDPName, GDPPacket, GdpAction};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::collections::HashSet;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
     ADD,
-    PAUSE, // pausing the forwarding of the topic, keeping connections alive
+    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
     PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME, // resume a paused topic
-    DELETE, // deleting a local topic interface and all its connections 
+    RESUME,   // resume a paused topic
+    DELETE,   // deleting a local topic interface and all its connections
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
@@ -31,7 +29,7 @@ pub enum TopicStateInFIB {
     PAUSED,
     DELETED,
 }
- 
+
 #[derive(Debug)]
 pub struct FibStateChange {
     pub action: FibChangeAction,
@@ -45,7 +43,7 @@ pub struct FibStateChange {
 pub struct FibConnection {
     pub state: TopicStateInFIB,
     pub connection_type: FibConnectionType,
-    tx: UnboundedSender<GDPPacket>, 
+    tx: UnboundedSender<GDPPacket>,
     pub description: Option<String>,
 }
 
@@ -143,7 +141,7 @@ pub async fn service_connection_fib_handler(
                                     error!("The gdpname {:?} does not exist", pkt.gdpname)
                                 }
                             }
-                            // send it back with response forwarding table 
+                            // send it back with response forwarding table
                             // let dst = response_forwarding_table.get(&pkt.gdpname);
                             // match dst {
                             //     Some(v) => {
@@ -153,7 +151,7 @@ pub async fn service_connection_fib_handler(
                             //         error!("the response channel does not exist");
                             //     }
                             // }
-                        }  
+                        }
                     },
 
                     _ => {
@@ -161,7 +159,7 @@ pub async fn service_connection_fib_handler(
                         continue;
                     }
                 }
-                
+
             }
 
 

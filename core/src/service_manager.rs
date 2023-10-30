@@ -4,11 +4,13 @@ use crate::api_server::ROSTopicRequest;
 #[cfg(feature = "ros")]
 use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
 
-use crate::pipeline::{construct_gdp_forward_from_bytes, construct_gdp_request_with_guid, construct_gdp_response_with_guid};
+use crate::pipeline::{
+    construct_gdp_forward_from_bytes, construct_gdp_request_with_guid,
+    construct_gdp_response_with_guid,
+};
 use crate::service_request_manager::{service_connection_fib_handler, FibConnectionType};
 use crate::structs::{
-    get_gdp_name_from_topic, GDPName, GdpAction,
-    Packet, generate_gdp_name_from_string, GDPPacket,
+    generate_gdp_name_from_string, get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet,
 };
 
 use crate::service_request_manager::{FibChangeAction, FibStateChange};
@@ -16,14 +18,13 @@ use crate::service_request_manager::{FibChangeAction, FibStateChange};
 use serde::{Deserialize, Serialize};
 
 use std::env;
+use std::str;
 use std::sync::{Arc, Mutex};
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use std::str;
 
 
-
-use futures::{StreamExt};
+use futures::StreamExt;
 
 
 use tokio::sync::mpsc::{self};
@@ -31,14 +32,13 @@ use tokio::sync::mpsc::{self};
 use tokio::time::Duration;
 
 
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum TopicManagerAction {
     ADD,
-    PAUSE, // pausing the forwarding of the topic, keeping connections alive
+    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
     PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME, // resume a paused topic
-    DELETE, // deleting a local topic interface and all its connections 
+    RESUME,   // resume a paused topic
+    DELETE,   // deleting a local topic interface and all its connections
     RESPONSE,
 }
 
@@ -53,8 +53,7 @@ pub struct TopicManagerRequest {
 
 // ROS service(provider) -> webrtc (publish remotely); webrtc -> local service client
 pub async fn ros_topic_remote_service_provider(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    fib_tx : UnboundedSender<GDPPacket>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
 ) {
     let mut join_handles = vec![];
@@ -74,7 +73,7 @@ pub async fn ros_topic_remote_service_provider(
             .spin_once(std::time::Duration::from_millis(10));
     });
 
-    let mut existing_topics = vec!();
+    let mut existing_topics = vec![];
 
     loop {
         tokio::select! {
@@ -114,7 +113,7 @@ pub async fn ros_topic_remote_service_provider(
                 if existing_topics.contains(&topic_gdp_name) {
                     info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
                 } else {
-                    
+
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
                         connection_type: FibConnectionType::RESPONSE,
@@ -143,11 +142,11 @@ pub async fn ros_topic_remote_service_provider(
                         loop {
                             tokio::select!{
                                 Some(req) = service.next() => {
-                                    // send it to webrtc 
-                                    //packet guid is the hash of the request id as string 
+                                    // send it to webrtc
+                                    //packet guid is the hash of the request id as string
                                     let guid = format!("{:?}", req.request_id);
                                     info!("received a ROS request {:?}", guid);
-                                    let packet_guid = generate_gdp_name_from_string(&guid); 
+                                    let packet_guid = generate_gdp_name_from_string(&guid);
                                     let packet = construct_gdp_request_with_guid(topic_gdp_name, topic_gdp_name, req.message.clone(), packet_guid );
                                     info!("sending to webrtc {:?}", packet);
                                     request_tx.send(packet).expect("send for ros subscriber failure");
@@ -156,22 +155,22 @@ pub async fn ros_topic_remote_service_provider(
                                             // send it to ros
                                             // let msg = r2r::std_msgs::String::from_bytes(&packet).unwrap();
                                             // service.send_response(msg).await.expect("send for ros subscriber failure");
-                                            
+
                                             info!("received from webrtc in ros_rx {:?}", packet);
                                             let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             // let respond_msg_in_json = &packet.payload.unwrap();
                                             respond_msg.from_binary(packet.payload.unwrap()); //.unwrap();
                                             info!("the decoded payload to publish is {:?}", respond_msg);
                                             req.respond(respond_msg).expect("could not send service response");
-                                        }, 
-                                        // timeout after 1 second 
+                                        },
+                                        // timeout after 1 second
                                         _ = tokio::time::sleep(Duration::from_millis(1000)) => {
                                             error!("timeout for ros_rx");
                                             let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             req.respond(respond_msg).expect("could not send service response");
                                         }
                                     }
-                                }, 
+                                },
                             }
                         }
                     }
@@ -180,7 +179,7 @@ pub async fn ros_topic_remote_service_provider(
 
 
                     join_handles.push(ros_handle);
-                }   
+                }
             }
         }
     }
@@ -188,8 +187,7 @@ pub async fn ros_topic_remote_service_provider(
 
 // webrtc -> sgc_local_service_caller (call the service locally) -> webrtc
 pub async fn ros_topic_local_service_caller(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    fib_tx : UnboundedSender<GDPPacket>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
@@ -212,7 +210,7 @@ pub async fn ros_topic_local_service_caller(
     });
 
 
-    let mut existing_topics = vec!();
+    let mut existing_topics = vec![];
 
     loop {
         tokio::select! {
@@ -272,8 +270,8 @@ pub async fn ros_topic_local_service_caller(
                     let untyped_client = manager_node.lock().unwrap()
                     .create_client_untyped(&topic_name, &topic_type)
                     .expect("topic publisher create failure");
-                    
-                    // receive from the rtc_rx and call the local service 
+
+                    // receive from the rtc_rx and call the local service
                     let ros_handle = tokio::spawn(async move {
                         info!("[ros_topic_local_service_caller] ROS handling loop has started!");
                         loop{
@@ -287,7 +285,7 @@ pub async fn ros_topic_local_service_caller(
                                     let resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await;
                                     info!("the response is {:?}", resp);
                                     //send back the response to the rtc
-                                    let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id)); 
+                                    let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id));
                                     let packet = construct_gdp_response_with_guid(topic_gdp_name, topic_gdp_name, resp.unwrap().unwrap().to_vec(), packet_guid);
                                     fib_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{
@@ -303,7 +301,7 @@ pub async fn ros_topic_local_service_caller(
 
 
                 }
-                
+
             }
         }
     }
@@ -312,8 +310,7 @@ pub async fn ros_topic_local_service_caller(
 
 // local ROS topic(provider) -> webrtc (publish remotely)
 pub async fn ros_topic_remote_publisher(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    fib_tx : UnboundedSender<GDPPacket>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
 ) {
     let mut join_handles = vec![];
@@ -333,7 +330,7 @@ pub async fn ros_topic_remote_publisher(
             .spin_once(std::time::Duration::from_millis(10));
     });
 
-    let mut existing_topics = vec!();
+    let mut existing_topics = vec![];
 
     loop {
         tokio::select! {
@@ -366,7 +363,7 @@ pub async fn ros_topic_remote_publisher(
                 if existing_topics.contains(&topic_gdp_name) {
                     info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
                 } else {
-                    
+
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
                         connection_type: FibConnectionType::SENDER,
@@ -390,7 +387,7 @@ pub async fn ros_topic_remote_publisher(
                     //         fib_tx.send(packet).expect("send for ros subscriber failure");
                     //     }
                     // });
-                    
+
                     let fib_tx = fib_tx.clone();
                     let ros_handle = tokio::spawn(async move {
                         info!("ROS handling loop has started!");
@@ -402,16 +399,15 @@ pub async fn ros_topic_remote_publisher(
                         }
                     });
                     join_handles.push(ros_handle);
-                }   
+                }
             }
         }
     }
 }
 
-// webrtc -> ros topic locally 
+// webrtc -> ros topic locally
 pub async fn ros_topic_remote_subscriber(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-    fib_tx : UnboundedSender<GDPPacket>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
@@ -434,7 +430,7 @@ pub async fn ros_topic_remote_subscriber(
     });
 
 
-    let mut existing_topics = vec!();
+    let mut existing_topics = vec![];
 
     loop {
         tokio::select! {
@@ -531,17 +527,14 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     // TODO: now it's hardcoded, make it changable later
     let crypto_name = "test_cert";
     let crypto_path = match env::var_os("SGC_CRYPTO_PATH") {
-        Some(config_file) => {
-            config_file.into_string().unwrap()
-        },
+        Some(config_file) => config_file.into_string().unwrap(),
         None => format!(
             "./sgc_launch/configs/crypto/{}/{}-private.pem",
             crypto_name, crypto_name
         ),
     };
-    
-    let certificate = std::fs::read(crypto_path)
-    .expect("crypto file not found!");
+
+    let certificate = std::fs::read(crypto_path).expect("crypto file not found!");
 
     let (fib_tx, fib_rx) = mpsc::unbounded_channel();
     let (channel_tx, channel_rx) = mpsc::unbounded_channel();
@@ -557,7 +550,8 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     let fib_tx_clone = fib_tx.clone();
 
     let service_creator_handle = tokio::spawn(async move {
-        ros_topic_remote_service_provider(client_operation_rx, fib_tx_clone, channel_tx_clone).await;
+        ros_topic_remote_service_provider(client_operation_rx, fib_tx_clone, channel_tx_clone)
+            .await;
     });
     waiting_rib_handles.push(service_creator_handle);
 
@@ -565,10 +559,10 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     let channel_tx_clone = channel_tx.clone();
     let fib_tx_clone = fib_tx.clone();
     let topic_creator_handle = tokio::spawn(async move {
-        // This is because the ROS node creation is not thread safe 
+        // This is because the ROS node creation is not thread safe
         // See: https://github.com/ros2/rosbag2/issues/329
         std::thread::sleep(std::time::Duration::from_millis(500));
-        ros_topic_local_service_caller(service_operation_rx,  fib_tx_clone, channel_tx_clone).await;
+        ros_topic_local_service_caller(service_operation_rx, fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
 
@@ -584,7 +578,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     let fib_tx_clone = fib_tx.clone();
     let topic_creator_handle = tokio::spawn(async move {
         std::thread::sleep(std::time::Duration::from_millis(1500));
-        ros_topic_remote_publisher(publisher_operation_rx,  fib_tx_clone, channel_tx_clone).await;
+        ros_topic_remote_publisher(publisher_operation_rx, fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
 
@@ -605,7 +599,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                         info!("detected a new topic {:?} with action {:?}, topic gdpname {:?}", topic_name, action, topic_gdp_name);
                         match action.as_str() {
                             // provide service locally and send to remote service
-                            "client" => { 
+                            "client" => {
                                 let topic_name_clone = topic_name.clone();
                                 let certificate = certificate.clone();
                                 let topic_operation_tx = client_operation_tx.clone();
@@ -631,8 +625,8 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     certificate: certificate,
                                 };
                                 let _ = topic_operation_tx.send(topic_creator_request);
-                            }, 
-                            "pub" => { 
+                            },
+                            "pub" => {
                                 let topic_name_clone = topic_name.clone();
                                 let certificate = certificate.clone();
                                 let topic_operation_tx = publisher_operation_tx.clone();
@@ -658,7 +652,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     certificate: certificate,
                                 };
                                 let _ = topic_operation_tx.send(topic_creator_request);
-                            }, 
+                            },
                             _ => {
                                 warn!("unknown action {}", action);
                             }
@@ -674,12 +668,12 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 &topic_type,
                                 &certificate,
                             ));
-                        
+
                         match action.as_str() {
 
-                            // source: fib -> webrtc 
+                            // source: fib -> webrtc
                             "source" => {
-                                
+
                                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 // let sender_url = "sender".to_string();
                                 let sender_url = payload.forward_sender_url.unwrap();
@@ -703,7 +697,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let channel_update_msg = FibStateChange {
                                     action: FibChangeAction::ADD,
                                     topic_gdp_name: topic_gdp_name,
-                                    connection_type: connection_type, 
+                                    connection_type: connection_type,
                                     forward_destination: Some(local_to_rtc_tx),
                                     description: Some("webrtc stream".to_string()),
                                 };
@@ -723,7 +717,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     register_webrtc_stream(&receiver_url, Some(peer_dialing_url)).await;
                                 let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
                                 waiting_rib_handles.push(rtc_handle);
-                                
+
                             }
                             _ => {
                                 warn!("unknown action {}", action);
@@ -732,7 +726,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                     }
                     // "del" => {
                     //     info!("deleting topic {:?}", payload);
-                        
+
                     //     match payload.ros_op.as_str() {
                     //         "pub" => {
                     //             let topic_operation_tx = client_operation_tx.clone();
@@ -744,7 +738,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                     //             };
                     //             let _ = topic_operation_tx.send(topic_creator_request);
 
-                    //         }, 
+                    //         },
                     //         "sub" => {
                     //             let topic_operation_tx = service_operation_tx.clone();
                     //             let topic_creator_request = TopicManagerRequest {
@@ -759,10 +753,10 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                     //             warn!("unknown action {}", payload.ros_op);
                     //         }
                     //     }
-                    // },               
+                    // },
                     // "resume" => {
                     //     info!("resuming topic {:?}", payload);
-                        
+
                     //     match payload.ros_op.as_str() {
                     //         "pub" => {
                     //             let topic_operation_tx = client_operation_tx.clone();
@@ -774,7 +768,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                     //             };
                     //             let _ = topic_operation_tx.send(topic_creator_request);
 
-                    //         }, 
+                    //         },
                     //         "sub" => {
                     //             let topic_operation_tx = service_operation_tx.clone();
                     //             let topic_creator_request = TopicManagerRequest {

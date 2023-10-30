@@ -37,7 +37,10 @@ pub fn add_entity_to_database_as_transaction(
         pipe.lpush(key, value).query(con)
     })?;
     info!("The current number of entities in database is: {}", new_val);
-    println!("successfully added entity {} {} to database {}", key, value, new_val);
+    println!(
+        "successfully added entity {} {} to database {}",
+        key, value, new_val
+    );
     Ok(())
 }
 
