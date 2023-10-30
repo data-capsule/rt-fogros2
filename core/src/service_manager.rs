@@ -51,30 +51,6 @@ pub struct TopicManagerRequest {
 }
 
 
-// pub struct rmw_request_id_s {
-// pub writer_guid: [i8; 16usize],
-// pub sequence_number: i64,
-// }
-// generate [u8:4] from the above struct 
-
-// pub fn get_service_guid_from_request(
-//     request: r2r::UntypedServiceRequest
-// ) -> GDPName {
-//     // GDPANME = [u8:4]
-//     let mut service_guid = GDPName([0; 4]);
-//     let mut writer_guid = [0; 16];
-//     let mut sequence_number = 0;
-//     let mut request_id = request.request_id;
-//     // let mut request_id_bytes = request_id.as_bytes();
-//     let mut writer_guid_bytes = request_id.writer_guid;//&request_id_bytes[0..16];
-//     let mut sequence_number_bytes = request_id.sequence_number;//&request_id_bytes[16..24];
-//     writer_guid.copy_from_slice(&writer_guid_bytes);
-//     sequence_number = i64::from_le_bytes(sequence_number_bytes.try_into().unwrap());
-//     service_guid.0.copy_from_slice(&writer_guid[0..4]);
-//     service_guid   
-// }
-
-
 // ROS service(provider) -> webrtc (publish remotely); webrtc -> local service client
 pub async fn ros_topic_remote_service_provider(
     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
@@ -82,15 +58,6 @@ pub async fn ros_topic_remote_service_provider(
     mut channel_tx: UnboundedSender<FibStateChange>,
 ) {
     let mut join_handles = vec![];
-
-    // let (request_tx, request_rx) = mpsc::unbounded_channel();
-    // let (response_tx, response_rx) = mpsc::unbounded_channel();
-    // let (channel_tx, channel_rx) = mpsc::unbounded_channel();
-    // let fib_handle: tokio::task::JoinHandle<()> = tokio::spawn(async move {
-    //     service_connection_fib_handler(request_rx, response_rx, channel_rx).await;
-    // });
-    // join_handles.push(fib_handle);
-
 
     let ctx = r2r::Context::create().expect("context creation failure");
     let node = Arc::new(Mutex::new(
@@ -343,6 +310,216 @@ pub async fn ros_topic_local_service_caller(
 }
 
 
+// local ROS topic(provider) -> webrtc (publish remotely)
+pub async fn ros_topic_remote_publisher(
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    mut fib_tx : UnboundedSender<GDPPacket>,
+    mut channel_tx: UnboundedSender<FibStateChange>,
+) {
+    let mut join_handles = vec![];
+
+    let ctx = r2r::Context::create().expect("context creation failure");
+    let node = Arc::new(Mutex::new(
+        r2r::Node::create(ctx, "sgc_remote_publisher", "namespace").expect("node creation failure"),
+    ));
+
+    let ros_manager_node_clone = node.clone();
+    let _handle = tokio::task::spawn_blocking(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ros_manager_node_clone
+            .clone()
+            .lock()
+            .unwrap()
+            .spin_once(std::time::Duration::from_millis(10));
+    });
+
+    let mut existing_topics = vec!();
+
+    loop {
+        tokio::select! {
+            Some(request) = status_recv.recv() => {
+                let topic_name = request.topic_name;
+                let topic_type = request.topic_type;
+                let action = request.action;
+                let certificate = request.certificate;
+                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                    &topic_name,
+                    &topic_type,
+                    &certificate,
+                ));
+
+                if request.action != TopicManagerAction::ADD {
+                    error!("action {:?} not supported in ros_topic_remote_service_provider", request.action);
+                    continue;
+                }
+
+                let manager_node = node.clone();
+
+                info!(
+                    "[ros_topic_remote_publisher_handler] topic creator for topic {}, type {}, action {:?}",
+                    topic_name, topic_type, action
+                );
+
+                // ROS subscriber -> FIB -> RTC
+                let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
+
+                if existing_topics.contains(&topic_gdp_name) {
+                    info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
+                } else {
+                    
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::ADD,
+                        connection_type: FibConnectionType::SENDER,
+                        topic_gdp_name: topic_gdp_name,
+                        forward_destination: Some(ros_tx),
+                        description: Some("ros topic send".to_string()),
+                    };
+                    let _ = channel_tx.send(channel_update_msg);
+
+                    existing_topics.push(topic_gdp_name);
+                    let mut subscriber = manager_node.lock().unwrap()
+                    .subscribe_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
+                    .expect("topic subscribing failure");
+
+                    // let ros_handle = tokio::spawn(async move {
+                    //     info!("ROS handling loop has started!");
+                    //     while let Some(packet) = subscriber.next().await {
+                    //         // info!("received a ROS packet {:?}", packet);
+                    //         let ros_msg = packet;
+                    //         let packet = construct_gdp_forward_from_bytes(topic_gdp_name, topic_gdp_name, ros_msg );
+                    //         fib_tx.send(packet).expect("send for ros subscriber failure");
+                    //     }
+                    // });
+                    
+                    let fib_tx = fib_tx.clone();
+                    let ros_handle = tokio::spawn(async move {
+                        info!("ROS handling loop has started!");
+                        while let Some(packet) = subscriber.next().await {
+                            info!("received a ROS packet {:?}", packet);
+                            let ros_msg = packet;
+                            let packet = construct_gdp_forward_from_bytes(topic_gdp_name, topic_gdp_name, ros_msg );
+                            fib_tx.send(packet).expect("send for ros subscriber failure");
+                        }
+                    });
+                    join_handles.push(ros_handle);
+                }   
+            }
+        }
+    }
+}
+
+// webrtc -> ros topic locally 
+pub async fn ros_topic_remote_subscriber(
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    mut fib_tx : UnboundedSender<GDPPacket>,
+    mut channel_tx: UnboundedSender<FibStateChange>,
+) {
+    info!("ros_topic_remote_subscriber_handler has started");
+    let mut join_handles = vec![];
+
+    let ctx = r2r::Context::create().expect("context creation failure");
+    let node = Arc::new(Mutex::new(
+        r2r::Node::create(ctx, "sgc_remote_subscriber", "namespace")
+            .expect("node creation failure"),
+    ));
+
+    let ros_manager_node_clone = node.clone();
+    let _handle = tokio::task::spawn_blocking(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        ros_manager_node_clone
+            .clone()
+            .lock()
+            .unwrap()
+            .spin_once(std::time::Duration::from_millis(10));
+    });
+
+
+    let mut existing_topics = vec!();
+
+    loop {
+        tokio::select! {
+            Some(request) = status_recv.recv() => {
+                let topic_name = request.topic_name;
+                let topic_type = request.topic_type;
+                let action = request.action;
+                let certificate = request.certificate;
+                let fib_tx = fib_tx.clone();
+                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                    &topic_name,
+                    &topic_type,
+                    &certificate,
+                ));
+
+                if request.action != TopicManagerAction::ADD {
+                    // let channel_update_msg = FibStateChange {
+                    //     action: request.action,
+                    //     topic_gdp_name: topic_gdp_name,
+                    //     forward_destination: None,
+                    // };
+                    // let _ = channel_tx.send(channel_update_msg);
+                    error!("action {:?} not supported in ros_topic_remote_service_provider", request.action);
+                    continue;
+                }
+
+                // let stream = request.stream.unwrap();
+                let manager_node = node.clone();
+
+
+                info!(
+                    "[local_service_caller] topic creator for topic {}, type {}, action {:?}",
+                    topic_name, topic_type, action
+                );
+
+
+                // RTC -> FIB -> ROS publisher
+                let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
+
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::ADD,
+                    connection_type: FibConnectionType::RECEIVER,
+                    topic_gdp_name: topic_gdp_name,
+                    forward_destination: Some(ros_tx),
+                    description: Some("ros topic receive".to_string()),
+                };
+                let _ = channel_tx.send(channel_update_msg);
+
+
+                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, fib_tx.clone(), rtc_rx));
+                // join_handles.push(rtc_handle);
+
+                if existing_topics.contains(&topic_gdp_name) {
+                    info!("topic {:?} already exists in existing topics; don't need to create another publisher", topic_gdp_name);
+                } else {
+                    existing_topics.push(topic_gdp_name);
+                    let publisher = manager_node.lock().unwrap()
+                    .create_publisher_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
+                    .expect("topic publisher create failure");
+
+                    let ros_handle = tokio::spawn(async move {
+                        info!("[ros_topic_remote_subscriber_handler] ROS handling loop has started!");
+                        loop{
+                            let pkt_to_forward = ros_rx.recv().await.expect("ros_topic_remote_subscriber_handler crashed!!");
+                            if pkt_to_forward.action == GdpAction::Forward {
+                                info!("new payload to publish");
+                                if pkt_to_forward.gdpname == topic_gdp_name {
+                                    let payload = pkt_to_forward.get_byte_payload().unwrap();
+                                    //let ros_msg = serde_json::from_str(str::from_utf8(payload).unwrap()).expect("json parsing failure");
+                                    // info!("the decoded payload to publish is {:?}", ros_msg);
+                                    publisher.publish(payload.clone()).unwrap();
+                                } else{
+                                    info!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
+                                }
+                            }
+                        }
+                    });
+                    join_handles.push(ros_handle);
+                }
+            }
+        }
+    }
+}
+
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct RosTopicStatus {
     pub action: String,
@@ -374,12 +551,15 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     waiting_rib_handles.push(fib_handle);
 
     let (client_operation_tx, client_operation_rx) = mpsc::unbounded_channel();
+    let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
+    let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
     let channel_tx_clone = channel_tx.clone();
     let fib_tx_clone = fib_tx.clone();
-    let topic_creator_handle = tokio::spawn(async move {
+
+    let service_creator_handle = tokio::spawn(async move {
         ros_topic_remote_service_provider(client_operation_rx, fib_tx_clone, channel_tx_clone).await;
     });
-    waiting_rib_handles.push(topic_creator_handle);
+    waiting_rib_handles.push(service_creator_handle);
 
     let (service_operation_tx, service_operation_rx) = mpsc::unbounded_channel();
     let channel_tx_clone = channel_tx.clone();
@@ -389,6 +569,22 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
         // See: https://github.com/ros2/rosbag2/issues/329
         std::thread::sleep(std::time::Duration::from_millis(500));
         ros_topic_local_service_caller(service_operation_rx,  fib_tx_clone, channel_tx_clone).await;
+    });
+    waiting_rib_handles.push(topic_creator_handle);
+
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
+    let topic_creator_handle = tokio::spawn(async move {
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        ros_topic_remote_subscriber(subscriber_operation_rx, fib_tx_clone, channel_tx_clone).await;
+    });
+    waiting_rib_handles.push(topic_creator_handle);
+
+    let channel_tx_clone = channel_tx.clone();
+    let fib_tx_clone = fib_tx.clone();
+    let topic_creator_handle = tokio::spawn(async move {
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        ros_topic_remote_publisher(publisher_operation_rx,  fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
 
@@ -413,13 +609,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let topic_name_clone = topic_name.clone();
                                 let certificate = certificate.clone();
                                 let topic_operation_tx = client_operation_tx.clone();
-                                // let handle = tokio::spawn(
-                                //     async move {
-                                //         create_new_local_service_caller(topic_gdp_name, topic_name_cloned, topic_type, certificate,
-                                //             topic_operation_tx).await;
-                                //     }
-                                // );
-                                // waiting_rib_handles.push(handle);
                                 let topic_creator_request = TopicManagerRequest {
                                     action: TopicManagerAction::ADD,
                                     topic_name: topic_name_clone,
@@ -435,6 +624,33 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                 let certificate = certificate.clone();
                                 let topic_type = topic_type.clone();
                                 let topic_operation_tx = service_operation_tx.clone();
+                                let topic_creator_request = TopicManagerRequest {
+                                    action: TopicManagerAction::ADD,
+                                    topic_name: topic_name_clone,
+                                    topic_type: topic_type,
+                                    certificate: certificate,
+                                };
+                                let _ = topic_operation_tx.send(topic_creator_request);
+                            }, 
+                            "pub" => { 
+                                let topic_name_clone = topic_name.clone();
+                                let certificate = certificate.clone();
+                                let topic_operation_tx = publisher_operation_tx.clone();
+                                let topic_creator_request = TopicManagerRequest {
+                                    action: TopicManagerAction::ADD,
+                                    topic_name: topic_name_clone,
+                                    topic_type: topic_type,
+                                    certificate: certificate,
+                                };
+                                let _ = topic_operation_tx.send(topic_creator_request);
+                            }
+
+                            // provide service remotely and interact with local service, and send back
+                            "sub" => {
+                                let topic_name_clone = topic_name.clone();
+                                let certificate = certificate.clone();
+                                let topic_type = topic_type.clone();
+                                let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicManagerRequest {
                                     action: TopicManagerAction::ADD,
                                     topic_name: topic_name_clone,

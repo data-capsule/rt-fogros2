@@ -7,7 +7,7 @@ server = "localhost:3002"
 client = "localhost:3005"
 
 def send_routing_request(addr, source_or_destination, sender_url, receiver_url, connection_type):
-    send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type)
+    # send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type)
     send_routing_request_topic(addr, source_or_destination, sender_url, receiver_url, connection_type)
 
 def send_routing_request_service(addr, source_or_destination, sender_url, receiver_url, connection_type):
@@ -46,8 +46,8 @@ def send_routing_request_topic(addr, source_or_destination, sender_url, receiver
         "api_op": "routing",
         "ros_op": source_or_destination,
         "crypto": "test_cert",
-        "topic_name": "/add_three_ints",
-        "topic_type": "bench_msgs/srv/AddThreeInts",
+        "topic_name": "/chatter",
+        "topic_type": "std_msgs/msg/String",
         "connection_type": connection_type,
         "forward_sender_url": sender_url, 
         "forward_receiver_url": receiver_url

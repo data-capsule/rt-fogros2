@@ -125,11 +125,15 @@ impl Packet for GDPPacket {
                 .len(),
             None => 0,
         };
+        let guid = match &self.guid {
+            Some(guid) => *guid,
+            None => generate_random_gdp_name(),
+        };
         let transit_packet = match &self.payload {
             Some(payload) => GDPHeaderInTransit {
                 action: self.action,
                 destination: self.gdpname,
-                guid: self.guid.unwrap(),
+                guid: guid,
                 length: payload.len() + name_record_length,
             },
             None => {
