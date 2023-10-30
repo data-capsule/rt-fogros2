@@ -27,8 +27,8 @@ assignment:
   machine_server: server
   machine_switch: server
 
-topology:
-  machine_client:
-    children: 
-      - machine_server
-      - machine_switch
+# topology:
+#   machine_client:
+#     children: 
+#       - machine_server
+#       - machine_switch
