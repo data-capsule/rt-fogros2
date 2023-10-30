@@ -154,4 +154,5 @@ yaml_dict = yaml.safe_load(yaml_str)
 root_dict = yaml_dict['root']
 root_node = build_tree(root_dict)
 print_tree(root_node)
+construct_tree_by_sending_request_service(root_node)
 construct_tree_by_sending_request_topic(root_node)
