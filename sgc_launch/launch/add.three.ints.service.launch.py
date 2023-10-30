@@ -9,7 +9,7 @@ def generate_launch_description():
 
 
     listener_node = Node(
-        package="bench", executable="listener", output="screen"
+        package="bench", executable="talker", output="screen"
     )
 
     ld.add_action(listener_node)

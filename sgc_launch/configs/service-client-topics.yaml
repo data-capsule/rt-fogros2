@@ -13,19 +13,19 @@ state_machine:
   standby: 
   client: 
     topics: 
-      - /chatter: pub 
+      - /chatter: sub 
     services:
       - /add_three_ints: client 
   server: 
     topics: 
-      - /chatter: sub
+      - /chatter: pub
     services:
       - /add_three_ints: service 
 
 assignment:
   machine_client: client
   machine_server: server
-  machine_switch: server
+  machine_switch: standby
 
 # topology:
 #   machine_client:

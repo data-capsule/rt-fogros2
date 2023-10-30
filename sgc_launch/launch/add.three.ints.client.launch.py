@@ -8,7 +8,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     talker_node = Node(
-        package="bench", executable="talker",
+        package="bench", executable="listener",
     )
 
     ld.add_action(talker_node)
