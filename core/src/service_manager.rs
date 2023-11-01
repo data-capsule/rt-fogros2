@@ -562,57 +562,57 @@ async fn sender_network_routing_thread_manager(
         };
 
         allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
-        let publisher_listening_gdp_name = generate_random_gdp_name();
+        let sender_listening_gdp_name = generate_random_gdp_name();
 
         // currently open another synchronous connection for put and get
-        let publisher_topic = format!("{}-pub", gdp_name_to_string(topic_gdp_name));
-        let subscriber_topic = format!("{}-sub", gdp_name_to_string(topic_gdp_name));
+        let sender_topic = format!("{}-sender", gdp_name_to_string(topic_gdp_name));
+        let receiver_topic = format!("{}-receiver", gdp_name_to_string(topic_gdp_name));
 
         let redis_addr_and_port = get_redis_address_and_port();
         let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
             .await
             .expect("Cannot connect to Redis");
-        let topic = format!("__keyspace@0__:{}", subscriber_topic);
+        let topic = format!("__keyspace@0__:{}", receiver_topic);
         let mut msgs = pubsub_con
             .psubscribe(&topic)
             .await
             .expect("Cannot subscribe to topic");
 
-        let subscribers = get_entity_from_database(&redis_url, &subscriber_topic)
-            .expect("Cannot get subscriber from database");
-        info!("subscriber list {:?}", subscribers);
+        let receivers = get_entity_from_database(&redis_url, &receiver_topic)
+            .expect("Cannot get receiver from database");
+        info!("receiver list {:?}", receivers);
 
-        let tasks = subscribers.clone().into_iter().map(|subscriber| {
+        let tasks = receivers.clone().into_iter().map(|receiver| {
             let topic_name_clone = topic_name.clone();
             let topic_type_clone = topic_type.clone();
             let certificate_clone = certificate.clone();
-            let publisher_topic = publisher_topic.clone();
+            let sender_topic = sender_topic.clone();
             let channel_tx = channel_tx.clone();
             let fib_tx_clone = fib_tx.clone();
             
             let redis_url = redis_url.clone();
-            let publisher_listening_gdp_name_clone = publisher_listening_gdp_name.clone();
+            let sender_listening_gdp_name_clone = sender_listening_gdp_name.clone();
 
             tokio::spawn(async move {
-                info!("subscriber {}", subscriber);
-                let publisher_url = format!(
+                info!("receiver {}", receiver);
+                let sender_url = format!(
                     "{},{},{}",
                     gdp_name_to_string(topic_gdp_name),
-                    gdp_name_to_string(publisher_listening_gdp_name_clone),
-                    subscriber
+                    gdp_name_to_string(sender_listening_gdp_name_clone),
+                    receiver
                 );
-                info!("publisher listening for signaling url {}", publisher_url);
+                info!("sender listening for signaling url {}", sender_url);
 
-                add_entity_to_database_as_transaction(&redis_url, &publisher_topic, &publisher_url)
-                    .expect("Cannot add publisher to database");
+                add_entity_to_database_as_transaction(&redis_url, &sender_topic, &sender_url)
+                    .expect("Cannot add sender to database");
                 info!(
-                    "publisher {} added to database of channel {}",
-                    &publisher_url, publisher_topic
+                    "sender {} added to database of channel {}",
+                    &sender_url, sender_topic
                 );
 
-                let webrtc_stream = register_webrtc_stream(&publisher_url, None).await;
+                let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
 
-                info!("publisher registered webrtc stream");
+                info!("sender registered webrtc stream");
 
                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                 // let sender_url = "sender".to_string();
@@ -641,39 +641,39 @@ async fn sender_network_routing_thread_manager(
                         info!("the operation is not lpush, ignore");
                         continue;
                     }
-                    let updated_subscribers =
-                        get_entity_from_database(&redis_url, &subscriber_topic)
-                            .expect("Cannot get subscriber from database");
+                    let updated_receivers =
+                        get_entity_from_database(&redis_url, &receiver_topic)
+                            .expect("Cannot get receiver from database");
                     info!(
-                        "get a list of subscribers from KVS {:?}",
-                        updated_subscribers
+                        "get a list of receivers from KVS {:?}",
+                        updated_receivers
                     );
-                    let subscriber = updated_subscribers.first().unwrap(); // first or last?
-                    if subscribers.clone().contains(subscriber) {
-                        warn!("subscriber {} already in the list, ignore", subscriber);
+                    let receiver = updated_receivers.first().unwrap(); // first or last?
+                    if receivers.clone().contains(receiver) {
+                        warn!("receiver {} already in the list, ignore", receiver);
                         continue;
                     }
-                    let publisher_url = format!(
+                    let sender_url = format!(
                         "{},{},{}",
                         gdp_name_to_string(topic_gdp_name),
-                        gdp_name_to_string(publisher_listening_gdp_name),
-                        subscriber
+                        gdp_name_to_string(sender_listening_gdp_name),
+                        receiver
                     );
-                    info!("publisher listening for signaling url {}", publisher_url);
+                    info!("sender listening for signaling url {}", sender_url);
 
                     add_entity_to_database_as_transaction(
                         &redis_url,
-                        &publisher_topic,
-                        &publisher_url,
+                        &sender_topic,
+                        &sender_url,
                     )
-                    .expect("Cannot add publisher to database");
+                    .expect("Cannot add sender to database");
                     info!(
-                        "publisher {} added to database of channel {}",
-                        &publisher_url, publisher_topic
+                        "sender {} added to database of channel {}",
+                        &sender_url, sender_topic
                     );
 
-                    let webrtc_stream = register_webrtc_stream(&publisher_url, None).await;
-                    info!("publisher registered webrtc stream");
+                    let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
+                    info!("sender registered webrtc stream");
 
                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                     // let sender_url = "sender".to_string();
@@ -707,7 +707,7 @@ async fn receiver_network_routing_thread_manager(
     fib_tx: UnboundedSender<GDPPacket>,
 ) {
     while let Some(request) = request_rx.recv().await {
-        let subscriber_listening_gdp_name = generate_random_gdp_name();
+        let receiver_listening_gdp_name = generate_random_gdp_name();
         let redis_url = get_redis_url();
         let topic_name = request.topic_name.clone();
         let topic_type = request.topic_type.clone();
@@ -720,14 +720,14 @@ async fn receiver_network_routing_thread_manager(
         let redis_url = get_redis_url();
         allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
         // currently open another synchronous connection for put and get
-        let publisher_topic = format!("{}-pub", gdp_name_to_string(topic_gdp_name));
-        let subscriber_topic = format!("{}-sub", gdp_name_to_string(topic_gdp_name));
+        let sender_topic = format!("{}-sender", gdp_name_to_string(topic_gdp_name));
+        let receiver_topic = format!("{}-receiver", gdp_name_to_string(topic_gdp_name));
 
         let redis_addr_and_port = get_redis_address_and_port();
         let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
             .await
             .expect("Cannot connect to Redis");
-        let topic = format!("__keyspace@0__:{}", publisher_topic);
+        let topic = format!("__keyspace@0__:{}", sender_topic);
         let mut msgs = pubsub_con
             .psubscribe(&topic)
             .await
@@ -735,37 +735,37 @@ async fn receiver_network_routing_thread_manager(
 
         add_entity_to_database_as_transaction(
             &redis_url,
-            &subscriber_topic,
-            gdp_name_to_string(subscriber_listening_gdp_name).as_str(),
+            &receiver_topic,
+            gdp_name_to_string(receiver_listening_gdp_name).as_str(),
         )
-        .expect("Cannot add publisher to database");
-        info!("subscriber added to database");
+        .expect("Cannot add sender to database");
+        info!("receiver added to database");
 
-        let publishers = get_entity_from_database(&redis_url, &publisher_topic)
-            .expect("Cannot get subscriber from database");
-        info!("publisher list {:?}", publishers);
+        let senders = get_entity_from_database(&redis_url, &sender_topic)
+            .expect("Cannot get receiver from database");
+        info!("sender list {:?}", senders);
 
-        let tasks = publishers.clone().into_iter().map(|publisher| {
+        let tasks = senders.clone().into_iter().map(|sender| {
             let topic_name_clone = topic_name.clone();
             let topic_type_clone = topic_type.clone();
             let certificate_clone = certificate.clone();
-            let subscriber_listening_gdp_name_clone = subscriber_listening_gdp_name.clone();
-            if !publisher.ends_with(&gdp_name_to_string(subscriber_listening_gdp_name_clone)) {
+            let receiver_listening_gdp_name_clone = receiver_listening_gdp_name.clone();
+            if !sender.ends_with(&gdp_name_to_string(receiver_listening_gdp_name_clone)) {
                 info!(
-                    "find publisher mailbox {} doesn not end with subscriber {}",
-                    publisher,
-                    gdp_name_to_string(subscriber_listening_gdp_name_clone)
+                    "find sender mailbox {} doesn not end with receiver {}",
+                    sender,
+                    gdp_name_to_string(receiver_listening_gdp_name_clone)
                 );
                 let handle = tokio::spawn(async move {});
                 return handle;
             } else {
                 info!(
-                    "find publisher mailbox {} ends with subscriber {}",
-                    publisher,
-                    gdp_name_to_string(subscriber_listening_gdp_name_clone)
+                    "find sender mailbox {} ends with receiver {}",
+                    sender,
+                    gdp_name_to_string(receiver_listening_gdp_name_clone)
                 );
             }
-            let publisher = publisher
+            let sender = sender
                 .split(',')
                 .skip(4)
                 .take(4)
@@ -773,32 +773,32 @@ async fn receiver_network_routing_thread_manager(
                 .join(",");
 
             tokio::spawn(async move {
-                info!("publisher {}", publisher);
-                // subscriber's address
+                info!("sender {}", sender);
+                // receiver's address
                 let my_signaling_url = format!(
                     "{},{},{}",
                     gdp_name_to_string(topic_gdp_name),
-                    gdp_name_to_string(subscriber_listening_gdp_name_clone),
-                    publisher
+                    gdp_name_to_string(receiver_listening_gdp_name_clone),
+                    sender
                 );
-                // publisher's address
+                // sender's address
                 let peer_dialing_url = format!(
                     "{},{},{}",
                     gdp_name_to_string(topic_gdp_name),
-                    publisher,
-                    gdp_name_to_string(subscriber_listening_gdp_name)
+                    sender,
+                    gdp_name_to_string(receiver_listening_gdp_name)
                 );
-                // let subsc = format!("{}/{}", gdp_name_to_string(publisher_listening_gdp_name), subscriber);
+                // let subsc = format!("{}/{}", gdp_name_to_string(sender_listening_gdp_name), receiver);
                 info!(
-                    "subscriber uses signaling url {} that peers to {}",
+                    "receiver uses signaling url {} that peers to {}",
                     my_signaling_url, peer_dialing_url
                 );
-                // workaround to prevent subscriber from dialing before publisher is listening
+                // workaround to prevent receiver from dialing before sender is listening
                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                info!("subscriber starts to register webrtc stream");
+                info!("receiver starts to register webrtc stream");
                 let webrtc_stream =
                     register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
-                info!("subscriber registered webrtc stream");
+                info!("receiver registered webrtc stream");
 
             })
         });
@@ -819,33 +819,33 @@ async fn receiver_network_routing_thread_manager(
                                 continue;
                             }
 
-                            let updated_publishers = get_entity_from_database(&redis_url, &publisher_topic).expect("Cannot get publisher from database");
-                            info!("get a list of publishers from KVS {:?}", updated_publishers);
-                            let publisher = updated_publishers.first().unwrap(); //first or last?
+                            let updated_senders = get_entity_from_database(&redis_url, &sender_topic).expect("Cannot get sender from database");
+                            info!("get a list of senders from KVS {:?}", updated_senders);
+                            let sender = updated_senders.first().unwrap(); //first or last?
 
-                            if publishers.contains(publisher) {
-                                warn!("publisher {} already exists", publisher);
+                            if senders.contains(sender) {
+                                warn!("sender {} already exists", sender);
                                 continue;
                             }
 
-                            if !publisher.ends_with(&gdp_name_to_string(subscriber_listening_gdp_name)) {
-                                warn!("find publisher mailbox {} doesn not end with subscriber {}", publisher, gdp_name_to_string(subscriber_listening_gdp_name));
+                            if !sender.ends_with(&gdp_name_to_string(receiver_listening_gdp_name)) {
+                                warn!("find sender mailbox {} doesn not end with receiver {}", sender, gdp_name_to_string(receiver_listening_gdp_name));
                                 continue;
                             }
-                            let publisher = publisher.split(',').skip(4).take(4).collect::<Vec<&str>>().join(",");
+                            let sender = sender.split(',').skip(4).take(4).collect::<Vec<&str>>().join(",");
 
-                            // subscriber's address
-                            let my_signaling_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),gdp_name_to_string(subscriber_listening_gdp_name), publisher);
-                            // publisher's address
-                            let peer_dialing_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),publisher, gdp_name_to_string(subscriber_listening_gdp_name));
-                            // let subsc = format!("{}/{}", gdp_name_to_string(publisher_listening_gdp_name), subscriber);
-                            info!("subscriber uses signaling url {} that peers to {}", my_signaling_url, peer_dialing_url);
+                            // receiver's address
+                            let my_signaling_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),gdp_name_to_string(receiver_listening_gdp_name), sender);
+                            // sender's address
+                            let peer_dialing_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),sender, gdp_name_to_string(receiver_listening_gdp_name));
+                            // let subsc = format!("{}/{}", gdp_name_to_string(sender_listening_gdp_name), receiver);
+                            info!("receiver uses signaling url {} that peers to {}", my_signaling_url, peer_dialing_url);
                             tokio::time::sleep(Duration::from_millis(1000)).await;
-                            info!("subscriber starts to register webrtc stream");
-                            // workaround to prevent subscriber from dialing before publisher is listening
+                            info!("receiver starts to register webrtc stream");
+                            // workaround to prevent receiver from dialing before sender is listening
                             let webrtc_stream = register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
 
-                            info!("subscriber registered webrtc stream");
+                            info!("receiver registered webrtc stream");
                             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                             let fib_tx_clone = fib_tx.clone();
                             let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
@@ -1083,7 +1083,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     topic_name: topic_name,
                                     topic_type: topic_type,
                                     certificate: certificate.clone(),
-                                    connection_type: Some(payload.connection_type.unwrap()),
+                                    connection_type: Some(payload.connection_type.unwrap()),      
                                 }).expect("sender routing tx failure");
                             }
 
