@@ -9,30 +9,6 @@ class Node:
         self.children = []
         self.parent = parent
 
-def build_mcast_tree(node_dict, parent=None):
-    address = node_dict.get("address")
-    node = Node(address, parent)
-    
-    for child_dict in node_dict.get("children", []):
-        child_node = build_mcast_tree(child_dict, node)
-        node.children.append(child_node)
-    
-    return node
-
-def build_tree(node_dict, parent=None):
-    if isinstance(node_dict, str):
-        return Node(node_dict, parent)
-    # logger.info(f"node dict {node_dict}")
-    address = list(node_dict.keys())[0] # only one key, because its a tree
-    node = Node(address, parent)
-    
-    # logger.info(f"{node_dict[address]['children']}")
-    for child_dict in node_dict[address]['children']:
-        child_node = build_tree(child_dict, node)
-        node.children.append(child_node)
-    
-    return node
-
 def print_tree(node, level=0):
     print("  " * level + f"{node.address}")
     for child in node.children:
@@ -60,6 +36,11 @@ class SGC_Swarm:
         # default Berkeley's parameters 
         self.signaling_server_address = 'ws://3.18.194.127:8000'
         self.routing_information_base_address = '3.18.194.127:8002'
+        # self.redis_conn = redis.Redis(host= self.routing_information_base_address.split(":")[0], port=int(self.routing_information_base_address.split(":")[1]), db=0)
+        # self.redis_pubsub = self.redis_conn.pubsub()
+        # self.redis_conn.config_set('notify-keyspace-events', 'KEA')
+        # self.redis_pubsub.run_in_thread(sleep_time=0.1)
+
         self.sgc_address = sgc_address
 
         # topic dictionary: map topic to topic type 
@@ -90,7 +71,7 @@ class SGC_Swarm:
         self._load_identifiers(config)
         self._load_services(config)
         self._load_topics(config)
-        # print_tree(build_tree(config["topology"]))
+        print_tree(self.build_tree(config["topology"]))
         self._load_state_machine(config)
         
     '''
@@ -129,7 +110,7 @@ class SGC_Swarm:
                         else:
                             self.logger.warn(f"adding topic {topic_name} to SGC router")
                             send_topic_request("add", topic_action, topic_name, topic_type, self.sgc_address)
-                            #self.construct_tree_by_sending_request_topic(build_tree(self.config["topology"]), topic_name, topic_type)
+                            self.construct_tree_by_sending_request_topic(self.build_tree(self.config["topology"]), topic_name, topic_type)
 
                 # add in new services 
                 if self.state_dict[current_state].services:
@@ -145,7 +126,7 @@ class SGC_Swarm:
                         else:
                             self.logger.warn(f"adding service {service_name} to SGC router")
                             send_service_request("add", service_action, service_name, service_type, self.sgc_address)
-                            # self.construct_tree_by_sending_request_service(build_tree(self.config["topology"]), topic_name, topic_type)
+                            self.construct_tree_by_sending_request_service(self.build_tree(self.config["topology"]), service_name, service_type)
 
                 self.assignment_dict[machine] = new_assignment_dict[machine]
             else:
@@ -215,7 +196,7 @@ class SGC_Swarm:
 
             if node.address == self.instance_identifer:
                 # establish request channel from node to child
-                send_routing_request_service(
+                self.send_routing_request_service(
                     self.sgc_address,
                     topic_name, 
                     topic_type,
@@ -225,7 +206,7 @@ class SGC_Swarm:
                     "request"
                 )
 
-                send_routing_request_service(
+                self.send_routing_request_service(
                     self.sgc_address,
                     topic_name, 
                     topic_type,
@@ -237,7 +218,7 @@ class SGC_Swarm:
 
             if child.address == self.instance_identifer:
                 # establish response channel from child to node
-                send_routing_request_service(
+                self.send_routing_request_service(
                     self.sgc_address,
                     topic_name, 
                     topic_type,
@@ -247,7 +228,7 @@ class SGC_Swarm:
                     "request"
                 )
                 
-                send_routing_request_service(
+                self.send_routing_request_service(
                     self.sgc_address,
                     topic_name, 
                     topic_type,
@@ -267,7 +248,7 @@ class SGC_Swarm:
 
             if node.address == self.instance_identifer:
                 # establish request channel from node to child
-                send_routing_request_topic(
+                self.send_routing_request_topic(
                     self.sgc_address,
                     topic_name, 
                     topic_type,
@@ -277,15 +258,114 @@ class SGC_Swarm:
                     "pub"
                 )
             if child.address == self.instance_identifer:
-                send_routing_request_topic(
-                self.sgc_address,
-                "destination",
-                "topic" + node.address + session_id,
-                "topic" + child.address + session_id,
-                "pub"
+                self.send_routing_request_topic(
+                    self.sgc_address,
+                    topic_name, 
+                    topic_type,
+                    "destination",
+                    "topic" + node.address + session_id,
+                    "topic" + child.address + session_id,
+                    "pub"
                 )
 
             self.construct_tree_by_sending_request_topic(child, topic_name, topic_type)
+
+    # def build_mcast_tree(self, node_dict, parent=None):
+    #     address = node_dict.get("address")
+    #     node = Node(address, parent)
+        
+    #     for child_dict in node_dict.get("children", []):
+    #         child_node = self.build_mcast_tree(child_dict, node)
+    #         node.children.append(child_node)
+        
+    #     return node
+
+    def build_tree(self, node_dict, parent=None):
+        if isinstance(node_dict, str):
+            return Node(node_dict, parent)
+        self.logger.info(f"node dict {node_dict}")
+        address = list(node_dict.keys())[0] # only one key, because its a tree
+        node = Node(address, parent)
+        
+        self.logger.info(f"{node_dict[address]['children']}")
+        for child_dict in node_dict[address]['children']:
+            child_node = self.build_tree(child_dict, node)
+            node.children.append(child_node)
+        
+        return node
+
+    def send_routing_request_service(self, addr,topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
+        sha = hashlib.sha256()
+        sha.update(sender_url.encode())
+        sender_url = sha.hexdigest()
+        sha = hashlib.sha256()
+        sha.update(receiver_url.encode())
+        receiver_url = sha.hexdigest()
+        url_name = sender_url + receiver_url
+        self.logger.info(f"send routing request service {url_name}")
+        def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
+            sleep(1)
+            ros_topic = {
+                "api_op": "routing",
+                "ros_op": source_or_destination,
+                "crypto": "test_cert",
+                "topic_name": topic_name,
+                "topic_type": topic_type,
+                "connection_type": connection_type,
+                "forward_sender_url": sender_url, 
+                "forward_receiver_url": receiver_url
+            }
+            print(addr, ros_topic)
+            uri = f"http://{addr}/service"
+            # Create a new resource
+            response = requests.post(uri, json = ros_topic)
+            print(response)
+        
+        if source_or_destination == "source":
+            _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
+            # self.logger.info(f"set redis {url_name}")
+        elif source_or_destination == "destination":
+            _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
+
+    def send_routing_request_topic(self, addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
+        sha = hashlib.sha256()
+        sha.update(sender_url.encode())
+        sender_url = sha.hexdigest()
+        sha = hashlib.sha256()
+        sha.update(receiver_url.encode())
+        receiver_url = sha.hexdigest()
+        url_name = sender_url + receiver_url
+        self.logger.info(f"send routing request topic {url_name}")
+        def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
+            sleep(1)
+            ros_topic = {
+                "api_op": "routing",
+                "ros_op": source_or_destination,
+                "crypto": "test_cert",
+                "topic_name": topic_name,
+                "topic_type": topic_type,
+                "connection_type": connection_type,
+                "forward_sender_url": sender_url, 
+                "forward_receiver_url": receiver_url
+            }
+            print(addr, ros_topic)
+            uri = f"http://{addr}/topic"
+            # Create a new resource
+            response = requests.post(uri, json = ros_topic)
+            print(response)
+            
+
+        if source_or_destination == "source":
+            _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
+            # update redis 
+            # self.redis_conn.set(url_name, "1")
+        elif source_or_destination == "destination":
+            def _event_handler():
+                self.logger.info(f"event handler for {url_name}")
+                _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
+            # wait until the source redis is set using keyspace notification
+            # TODO: optimization having a unified thread for all of the keys
+            # self.redis_pubsub.psubscribe(**{f"__keyspace@0__:{url_name}/*": _event_handler})
 
     # phase 1: only allow changing the state on state machine 
     # TODO: allowing changing the state machine (not a must)
