@@ -12,6 +12,7 @@ pub enum FibChangeAction {
     PAUSEADD, // adding the entry to FIB, but keeps it paused
     RESUME,   // resume a paused topic
     DELETE,   // deleting a local topic interface and all its connections
+    STATE,    // save the state of the topic
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
@@ -201,6 +202,9 @@ pub async fn service_connection_fib_handler(
                             }
                         };
                         // TODO: pause add
+                    },
+                    FibChangeAction::STATE => {
+                        
                     },
                     // FibChangeAction::RESPONSE => {
                     //     info!("Response channel received {:?}", update);

@@ -525,68 +525,107 @@ pub struct RosTopicStatus {
 }
 
 
+pub struct RoutingManagerRequest {
+    action: FibChangeAction,
+    topic_name: String,
+    topic_type: String,
+    certificate: Vec<u8>,
+    connection_type: Option<String>,
+}
 
-
-async fn create_new_remote_publisher(
-    topic_gdp_name: GDPName, topic_name: String, topic_type: String, certificate: Vec<u8>,
+async fn sender_network_routing_thread_manager(
+    mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>,
 ) {
-    let redis_url = get_redis_url();
-    allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
-    let publisher_listening_gdp_name = generate_random_gdp_name();
+    // let mut streams = Arc::new(Mutex::new(vec![]);
 
-    // currently open another synchronous connection for put and get
-    let publisher_topic = format!("{}-pub", gdp_name_to_string(topic_gdp_name));
-    let subscriber_topic = format!("{}-sub", gdp_name_to_string(topic_gdp_name));
+    while let Some(request) = request_rx.recv().await {
 
-    let redis_addr_and_port = get_redis_address_and_port();
-    let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-        .await
-        .expect("Cannot connect to Redis");
-    let topic = format!("__keyspace@0__:{}", subscriber_topic);
-    let mut msgs = pubsub_con
-        .psubscribe(&topic)
-        .await
-        .expect("Cannot subscribe to topic");
+        let redis_url = get_redis_url();
+        let topic_name = request.topic_name.clone();
+        let topic_type = request.topic_type.clone();
+        let certificate = request.certificate.clone();
+        let fib_tx = fib_tx.clone();
+        let channel_tx = channel_tx.clone();
+        let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+            &topic_name,
+            &topic_type,
+            &certificate,
+        ));
+        let connection_type = match request.connection_type.clone().unwrap().as_str() {
+            "request" => FibConnectionType::REQUEST,
+            "response" => FibConnectionType::RESPONSE,
+            "pub" => FibConnectionType::RECEIVER,
+            "sub" => FibConnectionType::SENDER,
+            _ => FibConnectionType::BIDIRECTIONAL,
+        };
 
-    let subscribers = get_entity_from_database(&redis_url, &subscriber_topic)
-        .expect("Cannot get subscriber from database");
-    info!("subscriber list {:?}", subscribers);
+        allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
+        let publisher_listening_gdp_name = generate_random_gdp_name();
 
-    let tasks = subscribers.clone().into_iter().map(|subscriber| {
-        let topic_name_clone = topic_name.clone();
-        let topic_type_clone = topic_type.clone();
-        let certificate_clone = certificate.clone();
-        let publisher_topic = publisher_topic.clone();
-        let redis_url = redis_url.clone();
-        let publisher_listening_gdp_name_clone = publisher_listening_gdp_name.clone();
+        // currently open another synchronous connection for put and get
+        let publisher_topic = format!("{}-pub", gdp_name_to_string(topic_gdp_name));
+        let subscriber_topic = format!("{}-sub", gdp_name_to_string(topic_gdp_name));
 
-        tokio::spawn(async move {
-            info!("subscriber {}", subscriber);
-            let publisher_url = format!(
-                "{},{},{}",
-                gdp_name_to_string(topic_gdp_name),
-                gdp_name_to_string(publisher_listening_gdp_name_clone),
-                subscriber
-            );
-            info!("publisher listening for signaling url {}", publisher_url);
+        let redis_addr_and_port = get_redis_address_and_port();
+        let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
+            .await
+            .expect("Cannot connect to Redis");
+        let topic = format!("__keyspace@0__:{}", subscriber_topic);
+        let mut msgs = pubsub_con
+            .psubscribe(&topic)
+            .await
+            .expect("Cannot subscribe to topic");
 
-            add_entity_to_database_as_transaction(&redis_url, &publisher_topic, &publisher_url)
-                .expect("Cannot add publisher to database");
-            info!(
-                "publisher {} added to database of channel {}",
-                &publisher_url, publisher_topic
-            );
+        let subscribers = get_entity_from_database(&redis_url, &subscriber_topic)
+            .expect("Cannot get subscriber from database");
+        info!("subscriber list {:?}", subscribers);
 
-            let webrtc_stream = register_webrtc_stream(&publisher_url, None).await;
-            info!("publisher registered webrtc stream");
-            // let topic_creator_request = TopicModificationRequest {
-            //     action: FibChangeAction::ADD,
-            //     stream: Some(webrtc_stream),
-            //     topic_name: topic_name_clone,
-            //     topic_type: topic_type_clone,
-            //     certificate: certificate_clone,
-            // };
-            // let _ = topic_operation_tx.send(topic_creator_request);
+        let tasks = subscribers.clone().into_iter().map(|subscriber| {
+            let topic_name_clone = topic_name.clone();
+            let topic_type_clone = topic_type.clone();
+            let certificate_clone = certificate.clone();
+            let publisher_topic = publisher_topic.clone();
+            let channel_tx = channel_tx.clone();
+            let fib_tx_clone = fib_tx.clone();
+            
+            let redis_url = redis_url.clone();
+            let publisher_listening_gdp_name_clone = publisher_listening_gdp_name.clone();
+
+            tokio::spawn(async move {
+                info!("subscriber {}", subscriber);
+                let publisher_url = format!(
+                    "{},{},{}",
+                    gdp_name_to_string(topic_gdp_name),
+                    gdp_name_to_string(publisher_listening_gdp_name_clone),
+                    subscriber
+                );
+                info!("publisher listening for signaling url {}", publisher_url);
+
+                add_entity_to_database_as_transaction(&redis_url, &publisher_topic, &publisher_url)
+                    .expect("Cannot add publisher to database");
+                info!(
+                    "publisher {} added to database of channel {}",
+                    &publisher_url, publisher_topic
+                );
+
+                let webrtc_stream = register_webrtc_stream(&publisher_url, None).await;
+
+                info!("publisher registered webrtc stream");
+
+                let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                // let sender_url = "sender".to_string();
+                
+                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::ADD,
+                    topic_gdp_name: topic_gdp_name,
+                    connection_type: connection_type,
+                    forward_destination: Some(local_to_rtc_tx),
+                    description: Some("webrtc stream".to_string()),
+                };
+                let _ = channel_tx.send(channel_update_msg);
         })
     });
     let mut tasks = tasks.collect::<Vec<_>>();
@@ -635,19 +674,18 @@ async fn create_new_remote_publisher(
 
                     let webrtc_stream = register_webrtc_stream(&publisher_url, None).await;
                     info!("publisher registered webrtc stream");
-                    let topic_name_clone = topic_name.clone();
-                    let topic_type_clone = topic_type.clone();
-                    let certificate_clone = certificate.clone();
-                    let _publisher_topic = publisher_topic.clone();
-                    // let topic_operation_tx = topic_operation_tx.clone();
-                    // let topic_creator_request = TopicModificationRequest {
-                    //     action: FibChangeAction::ADD,
-                    //     stream: Some(webrtc_stream),
-                    //     topic_name: topic_name_clone,
-                    //     topic_type: topic_type_clone,
-                    //     certificate: certificate_clone,
-                    // };
-                    // let _ = topic_operation_tx.send(topic_creator_request);
+
+                    let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                    // let sender_url = "sender".to_string();
+                    let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx.clone(), local_to_rtc_rx));
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::ADD,
+                        topic_gdp_name: topic_gdp_name,
+                        connection_type: connection_type,
+                        forward_destination: Some(local_to_rtc_tx),
+                        description: Some("webrtc stream".to_string()),
+                    };
+                    let _ = channel_tx.send(channel_update_msg);
                 }
                 None => {
                     info!("message is none");
@@ -656,160 +694,177 @@ async fn create_new_remote_publisher(
         }
     });
     tasks.push(message_handling_task_handle);
-
-    // Wait for all tasks to complete
-    futures::future::join_all(tasks).await;
-    info!("all the subscribers are checked!");
-}
-
-async fn create_new_remote_subscriber(
-    topic_gdp_name: GDPName, topic_name: String, topic_type: String, certificate: Vec<u8>,
-) {
-    let subscriber_listening_gdp_name = generate_random_gdp_name();
-    let redis_url = get_redis_url();
-    allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
-    // currently open another synchronous connection for put and get
-    let publisher_topic = format!("{}-pub", gdp_name_to_string(topic_gdp_name));
-    let subscriber_topic = format!("{}-sub", gdp_name_to_string(topic_gdp_name));
-
-    let redis_addr_and_port = get_redis_address_and_port();
-    let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-        .await
-        .expect("Cannot connect to Redis");
-    let topic = format!("__keyspace@0__:{}", publisher_topic);
-    let mut msgs = pubsub_con
-        .psubscribe(&topic)
-        .await
-        .expect("Cannot subscribe to topic");
-
-    add_entity_to_database_as_transaction(
-        &redis_url,
-        &subscriber_topic,
-        gdp_name_to_string(subscriber_listening_gdp_name).as_str(),
-    )
-    .expect("Cannot add publisher to database");
-    info!("subscriber added to database");
-
-    let publishers = get_entity_from_database(&redis_url, &publisher_topic)
-        .expect("Cannot get subscriber from database");
-    info!("publisher list {:?}", publishers);
-
-    let tasks = publishers.clone().into_iter().map(|publisher| {
-        let topic_name_clone = topic_name.clone();
-        let topic_type_clone = topic_type.clone();
-        let certificate_clone = certificate.clone();
-        let subscriber_listening_gdp_name_clone = subscriber_listening_gdp_name.clone();
-        if !publisher.ends_with(&gdp_name_to_string(subscriber_listening_gdp_name_clone)) {
-            info!(
-                "find publisher mailbox {} doesn not end with subscriber {}",
-                publisher,
-                gdp_name_to_string(subscriber_listening_gdp_name_clone)
-            );
-            let handle = tokio::spawn(async move {});
-            return handle;
-        } else {
-            info!(
-                "find publisher mailbox {} ends with subscriber {}",
-                publisher,
-                gdp_name_to_string(subscriber_listening_gdp_name_clone)
-            );
-        }
-        let publisher = publisher
-            .split(',')
-            .skip(4)
-            .take(4)
-            .collect::<Vec<&str>>()
-            .join(",");
-
-        tokio::spawn(async move {
-            info!("publisher {}", publisher);
-            // subscriber's address
-            let my_signaling_url = format!(
-                "{},{},{}",
-                gdp_name_to_string(topic_gdp_name),
-                gdp_name_to_string(subscriber_listening_gdp_name_clone),
-                publisher
-            );
-            // publisher's address
-            let peer_dialing_url = format!(
-                "{},{},{}",
-                gdp_name_to_string(topic_gdp_name),
-                publisher,
-                gdp_name_to_string(subscriber_listening_gdp_name)
-            );
-            // let subsc = format!("{}/{}", gdp_name_to_string(publisher_listening_gdp_name), subscriber);
-            info!(
-                "subscriber uses signaling url {} that peers to {}",
-                my_signaling_url, peer_dialing_url
-            );
-            // workaround to prevent subscriber from dialing before publisher is listening
-            tokio::time::sleep(Duration::from_millis(1000)).await;
-            info!("subscriber starts to register webrtc stream");
-            let webrtc_stream =
-                register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
-            info!("subscriber registered webrtc stream");
-
-        })
-    });
-
-    // Wait for all tasks to complete
     futures::future::join_all(tasks).await;
     info!("all the mailboxes are checked!");
+    }
+    
+    // Wait for all tasks to complete
+    // futures::future::join_all(join_handles).await;
+}
 
-    loop {
-        tokio::select! {
-            Some(message) = msgs.next() => {
-                match message {
-                    Ok(message) => {
-                        let received_operation = String::from_resp(message).unwrap();
-                        info!("KVS {}", received_operation);
-                        if received_operation != "lpush" {
-                            info!("the operation is not lpush, ignore");
-                            continue;
+async fn receiver_network_routing_thread_manager(
+    mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>,
+) {
+    while let Some(request) = request_rx.recv().await {
+        let subscriber_listening_gdp_name = generate_random_gdp_name();
+        let redis_url = get_redis_url();
+        let topic_name = request.topic_name.clone();
+        let topic_type = request.topic_type.clone();
+        let certificate = request.certificate.clone();
+        let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+            &topic_name,
+            &topic_type,
+            &certificate,
+        ));
+        let redis_url = get_redis_url();
+        allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
+        // currently open another synchronous connection for put and get
+        let publisher_topic = format!("{}-pub", gdp_name_to_string(topic_gdp_name));
+        let subscriber_topic = format!("{}-sub", gdp_name_to_string(topic_gdp_name));
+
+        let redis_addr_and_port = get_redis_address_and_port();
+        let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
+            .await
+            .expect("Cannot connect to Redis");
+        let topic = format!("__keyspace@0__:{}", publisher_topic);
+        let mut msgs = pubsub_con
+            .psubscribe(&topic)
+            .await
+            .expect("Cannot subscribe to topic");
+
+        add_entity_to_database_as_transaction(
+            &redis_url,
+            &subscriber_topic,
+            gdp_name_to_string(subscriber_listening_gdp_name).as_str(),
+        )
+        .expect("Cannot add publisher to database");
+        info!("subscriber added to database");
+
+        let publishers = get_entity_from_database(&redis_url, &publisher_topic)
+            .expect("Cannot get subscriber from database");
+        info!("publisher list {:?}", publishers);
+
+        let tasks = publishers.clone().into_iter().map(|publisher| {
+            let topic_name_clone = topic_name.clone();
+            let topic_type_clone = topic_type.clone();
+            let certificate_clone = certificate.clone();
+            let subscriber_listening_gdp_name_clone = subscriber_listening_gdp_name.clone();
+            if !publisher.ends_with(&gdp_name_to_string(subscriber_listening_gdp_name_clone)) {
+                info!(
+                    "find publisher mailbox {} doesn not end with subscriber {}",
+                    publisher,
+                    gdp_name_to_string(subscriber_listening_gdp_name_clone)
+                );
+                let handle = tokio::spawn(async move {});
+                return handle;
+            } else {
+                info!(
+                    "find publisher mailbox {} ends with subscriber {}",
+                    publisher,
+                    gdp_name_to_string(subscriber_listening_gdp_name_clone)
+                );
+            }
+            let publisher = publisher
+                .split(',')
+                .skip(4)
+                .take(4)
+                .collect::<Vec<&str>>()
+                .join(",");
+
+            tokio::spawn(async move {
+                info!("publisher {}", publisher);
+                // subscriber's address
+                let my_signaling_url = format!(
+                    "{},{},{}",
+                    gdp_name_to_string(topic_gdp_name),
+                    gdp_name_to_string(subscriber_listening_gdp_name_clone),
+                    publisher
+                );
+                // publisher's address
+                let peer_dialing_url = format!(
+                    "{},{},{}",
+                    gdp_name_to_string(topic_gdp_name),
+                    publisher,
+                    gdp_name_to_string(subscriber_listening_gdp_name)
+                );
+                // let subsc = format!("{}/{}", gdp_name_to_string(publisher_listening_gdp_name), subscriber);
+                info!(
+                    "subscriber uses signaling url {} that peers to {}",
+                    my_signaling_url, peer_dialing_url
+                );
+                // workaround to prevent subscriber from dialing before publisher is listening
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                info!("subscriber starts to register webrtc stream");
+                let webrtc_stream =
+                    register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
+                info!("subscriber registered webrtc stream");
+
+            })
+        });
+
+        // Wait for all tasks to complete
+        futures::future::join_all(tasks).await;
+        info!("all the mailboxes are checked!");
+
+        loop {
+            tokio::select! {
+                Some(message) = msgs.next() => {
+                    match message {
+                        Ok(message) => {
+                            let received_operation = String::from_resp(message).unwrap();
+                            info!("KVS {}", received_operation);
+                            if received_operation != "lpush" {
+                                info!("the operation is not lpush, ignore");
+                                continue;
+                            }
+
+                            let updated_publishers = get_entity_from_database(&redis_url, &publisher_topic).expect("Cannot get publisher from database");
+                            info!("get a list of publishers from KVS {:?}", updated_publishers);
+                            let publisher = updated_publishers.first().unwrap(); //first or last?
+
+                            if publishers.contains(publisher) {
+                                warn!("publisher {} already exists", publisher);
+                                continue;
+                            }
+
+                            if !publisher.ends_with(&gdp_name_to_string(subscriber_listening_gdp_name)) {
+                                warn!("find publisher mailbox {} doesn not end with subscriber {}", publisher, gdp_name_to_string(subscriber_listening_gdp_name));
+                                continue;
+                            }
+                            let publisher = publisher.split(',').skip(4).take(4).collect::<Vec<&str>>().join(",");
+
+                            // subscriber's address
+                            let my_signaling_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),gdp_name_to_string(subscriber_listening_gdp_name), publisher);
+                            // publisher's address
+                            let peer_dialing_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),publisher, gdp_name_to_string(subscriber_listening_gdp_name));
+                            // let subsc = format!("{}/{}", gdp_name_to_string(publisher_listening_gdp_name), subscriber);
+                            info!("subscriber uses signaling url {} that peers to {}", my_signaling_url, peer_dialing_url);
+                            tokio::time::sleep(Duration::from_millis(1000)).await;
+                            info!("subscriber starts to register webrtc stream");
+                            // workaround to prevent subscriber from dialing before publisher is listening
+                            let webrtc_stream = register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
+
+                            info!("subscriber registered webrtc stream");
+                            let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                            let fib_tx_clone = fib_tx.clone();
+                            let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                            // let topic_name_clone = topic_name.clone();
+                            // let topic_type_clone = topic_type.clone();
+                            // let certificate_clone = certificate.clone();
+                            // let topic_operation_tx = topic_operation_tx.clone();
+                            // let topic_creator_request = TopicModificationRequest {
+                            //     action: FibChangeAction::ADD,
+                            //     stream: Some(webrtc_stream),
+                            //     topic_name: topic_name_clone,
+                            //     topic_type: topic_type_clone,
+                            //     certificate:certificate_clone,
+                            // };
+                            // let _ = topic_operation_tx.send(topic_creator_request);
+                        },
+                        Err(e) => {
+                            eprintln!("ERROR: {}", e);
                         }
-
-                        let updated_publishers = get_entity_from_database(&redis_url, &publisher_topic).expect("Cannot get publisher from database");
-                        info!("get a list of publishers from KVS {:?}", updated_publishers);
-                        let publisher = updated_publishers.first().unwrap(); //first or last?
-
-                        if publishers.contains(publisher) {
-                            warn!("publisher {} already exists", publisher);
-                            continue;
-                        }
-
-                        if !publisher.ends_with(&gdp_name_to_string(subscriber_listening_gdp_name)) {
-                            warn!("find publisher mailbox {} doesn not end with subscriber {}", publisher, gdp_name_to_string(subscriber_listening_gdp_name));
-                            continue;
-                        }
-                        let publisher = publisher.split(',').skip(4).take(4).collect::<Vec<&str>>().join(",");
-
-                        // subscriber's address
-                        let my_signaling_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),gdp_name_to_string(subscriber_listening_gdp_name), publisher);
-                        // publisher's address
-                        let peer_dialing_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),publisher, gdp_name_to_string(subscriber_listening_gdp_name));
-                        // let subsc = format!("{}/{}", gdp_name_to_string(publisher_listening_gdp_name), subscriber);
-                        info!("subscriber uses signaling url {} that peers to {}", my_signaling_url, peer_dialing_url);
-                        tokio::time::sleep(Duration::from_millis(1000)).await;
-                        info!("subscriber starts to register webrtc stream");
-                        // workaround to prevent subscriber from dialing before publisher is listening
-                        let webrtc_stream = register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
-
-                        info!("subscriber registered webrtc stream");
-                        let topic_name_clone = topic_name.clone();
-                        let topic_type_clone = topic_type.clone();
-                        let certificate_clone = certificate.clone();
-                        // let topic_operation_tx = topic_operation_tx.clone();
-                        // let topic_creator_request = TopicModificationRequest {
-                        //     action: FibChangeAction::ADD,
-                        //     stream: Some(webrtc_stream),
-                        //     topic_name: topic_name_clone,
-                        //     topic_type: topic_type_clone,
-                        //     certificate:certificate_clone,
-                        // };
-                        // let _ = topic_operation_tx.send(topic_creator_request);
-                    },
-                    Err(e) => {
-                        eprintln!("ERROR: {}", e);
                     }
                 }
             }
@@ -877,6 +932,31 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
         ros_topic_remote_publisher(publisher_operation_rx, fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(topic_creator_handle);
+
+
+    let fib_tx_clone = fib_tx.clone();
+    let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
+    let sender_routing_manager_handle = tokio::spawn(
+        async move { sender_network_routing_thread_manager(
+            sender_routing_rx, 
+            fib_tx_clone, 
+            channel_tx.clone()
+        ).await 
+        }
+    );
+    waiting_rib_handles.push(sender_routing_manager_handle);
+
+    let fib_tx_clone = fib_tx.clone();
+    let (receiver_routing_tx, receiver_routing_rx) = mpsc::unbounded_channel();
+    let receiver_routing_manager_handle = tokio::spawn(
+        async move { receiver_network_routing_thread_manager(
+            receiver_routing_rx, 
+            fib_tx_clone
+        ).await 
+        }
+    );
+    waiting_rib_handles.push(receiver_routing_manager_handle);
+
 
     loop {
         select! {
@@ -970,50 +1050,64 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             // source: fib -> webrtc
                             "source" => {
 
-                                let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                                // let sender_url = "sender".to_string();
-                                let sender_url = payload.forward_sender_url.unwrap();
-                                let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
-                                let fib_tx_clone = fib_tx.clone();
-                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
-                                waiting_rib_handles.push(rtc_handle);
+                                // let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                                // // let sender_url = "sender".to_string();
+                                // let sender_url = payload.forward_sender_url.unwrap();
+                                // let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
+                                // let fib_tx_clone = fib_tx.clone();
+                                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                                // waiting_rib_handles.push(rtc_handle);
+                                // // let channel_update_msg = FibStateChange {
+                                // //     action: FibChangeAction::ADD,
+                                // //     topic_gdp_name: topic_gdp_name,
+                                // //     forward_destination: Some(local_to_rtc_tx),
+                                // // };
+                                // // let _ = channel_tx.send(channel_update_msg);
+                                // let connection_type = match payload.connection_type.unwrap().as_str() {
+                                //     "request" => FibConnectionType::REQUEST,
+                                //     "response" => FibConnectionType::RESPONSE,
+                                //     "pub" => FibConnectionType::RECEIVER,
+                                //     "sub" => FibConnectionType::SENDER,
+                                //     _ => FibConnectionType::BIDIRECTIONAL,
+                                // };
                                 // let channel_update_msg = FibStateChange {
                                 //     action: FibChangeAction::ADD,
                                 //     topic_gdp_name: topic_gdp_name,
+                                //     connection_type: connection_type,
                                 //     forward_destination: Some(local_to_rtc_tx),
+                                //     description: Some("webrtc stream".to_string()),
                                 // };
                                 // let _ = channel_tx.send(channel_update_msg);
-                                let connection_type = match payload.connection_type.unwrap().as_str() {
-                                    "request" => FibConnectionType::REQUEST,
-                                    "response" => FibConnectionType::RESPONSE,
-                                    "pub" => FibConnectionType::RECEIVER,
-                                    "sub" => FibConnectionType::SENDER,
-                                    _ => FibConnectionType::BIDIRECTIONAL,
-                                };
-                                let channel_update_msg = FibStateChange {
+                                sender_routing_tx.send(RoutingManagerRequest {
                                     action: FibChangeAction::ADD,
-                                    topic_gdp_name: topic_gdp_name,
-                                    connection_type: connection_type,
-                                    forward_destination: Some(local_to_rtc_tx),
-                                    description: Some("webrtc stream".to_string()),
-                                };
-                                let _ = channel_tx.send(channel_update_msg);
+                                    topic_name: topic_name,
+                                    topic_type: topic_type,
+                                    certificate: certificate.clone(),
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                }).expect("sender routing tx failure");
                             }
 
                             // destination: webrtc -> fib
                             "destination" => {
-                                // info!("adding routing dst {:?}", payload);
-                                let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                                let fib_tx_clone = fib_tx.clone();
-                                // let receiver_url = "receiver".to_string();
-                                // let peer_dialing_url = "sender".to_string();
-                                let receiver_url = payload.forward_receiver_url.unwrap();
-                                let peer_dialing_url = payload.forward_sender_url.unwrap();
-                                let webrtc_stream =
-                                    register_webrtc_stream(&receiver_url, Some(peer_dialing_url)).await;
-                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
-                                waiting_rib_handles.push(rtc_handle);
+                                // // info!("adding routing dst {:?}", payload);
+                                // let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                                // let fib_tx_clone = fib_tx.clone();
+                                // // let receiver_url = "receiver".to_string();
+                                // // let peer_dialing_url = "sender".to_string();
+                                // let receiver_url = payload.forward_receiver_url.unwrap();
+                                // let peer_dialing_url = payload.forward_sender_url.unwrap();
+                                // let webrtc_stream =
+                                //     register_webrtc_stream(&receiver_url, Some(peer_dialing_url)).await;
+                                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                                // waiting_rib_handles.push(rtc_handle);
 
+                                receiver_routing_tx.send(RoutingManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    topic_name: topic_name,
+                                    topic_type: topic_type,
+                                    certificate: certificate.clone(),
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                }).expect("receiver routing tx failure");
                             }
                             _ => {
                                 warn!("unknown action {}", action);
