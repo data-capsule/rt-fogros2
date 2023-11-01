@@ -2,6 +2,7 @@
 from .web_requests import *
 import yaml 
 import pprint
+import random 
 
 class Node:
     def __init__(self, address, parent=None):
@@ -25,6 +26,12 @@ class SGC_StateMachine:
     def __repr__(self):
         return str(self.__dict__)
     
+def generate_hashed_name(list_of_str):
+    sha = hashlib.sha256()
+    for s in list_of_str:
+        sha.update(s.encode())
+    return sha.hexdigest()
+
 class SGC_Swarm: 
     def __init__(self, yaml_config, 
                  whoami, logger,
@@ -40,6 +47,8 @@ class SGC_Swarm:
         # self.redis_pubsub = self.redis_conn.pubsub()
         # self.redis_conn.config_set('notify-keyspace-events', 'KEA')
         # self.redis_pubsub.run_in_thread(sleep_time=0.1)
+
+        self.thread_num = str(random.randint(0, 1000000)) # unique idenfitier to differentiate from previous runs 
 
         self.sgc_address = sgc_address
 
@@ -294,13 +303,9 @@ class SGC_Swarm:
         
         return node
 
-    def send_routing_request_service(self, addr,topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
-        sha = hashlib.sha256()
-        sha.update(sender_url.encode())
-        sender_url = sha.hexdigest()
-        sha = hashlib.sha256()
-        sha.update(receiver_url.encode())
-        receiver_url = sha.hexdigest()
+    def send_routing_request_service(self, addr,topic_name, topic_type, source_or_destination, sender_url_str, receiver_url_str, connection_type):
+        sender_url = generate_hashed_name([sender_url_str, topic_name, topic_type])
+        receiver_url = generate_hashed_name([receiver_url_str, topic_name, topic_type])
         url_name = sender_url + receiver_url
         self.logger.info(f"send routing request service {url_name}")
         def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
@@ -327,13 +332,9 @@ class SGC_Swarm:
         elif source_or_destination == "destination":
             _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
 
-    def send_routing_request_topic(self, addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
-        sha = hashlib.sha256()
-        sha.update(sender_url.encode())
-        sender_url = sha.hexdigest()
-        sha = hashlib.sha256()
-        sha.update(receiver_url.encode())
-        receiver_url = sha.hexdigest()
+    def send_routing_request_topic(self, addr, topic_name, topic_type, source_or_destination, sender_url_str, receiver_url_str, connection_type):
+        sender_url = generate_hashed_name([sender_url_str, topic_name, topic_type])
+        receiver_url = generate_hashed_name([receiver_url_str, topic_name, topic_type])
         url_name = sender_url + receiver_url
         self.logger.info(f"send routing request topic {url_name}")
         def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
