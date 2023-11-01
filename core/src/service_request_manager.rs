@@ -174,15 +174,17 @@ pub async fn service_connection_fib_handler(
                             Some(v) => {
                                 // v.state = TopicStateInFIB::RUNNING;
                                 // v.receivers.push(update.forward_destination.unwrap());
+                                info!("local topic interface {:?} is added", update);
                                 v.receivers.push(FibConnection{
                                     state: TopicStateInFIB::RUNNING,
                                     connection_type: update.connection_type,
                                     tx: update.forward_destination.unwrap(),
                                     description: update.description,
                                 });
+                                
                             }
                             None =>{
-                                info!("Creating a new entry of gdp name {:?}", update.topic_gdp_name);
+                                info!("Creating a new entry of {:?}", update);
                                 // let state = FIBState {
                                 //     state: TopicStateInFIB::RUNNING,
                                 //     receivers: vec!(update.forward_destination.unwrap()),

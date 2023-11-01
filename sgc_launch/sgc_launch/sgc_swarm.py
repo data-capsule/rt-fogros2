@@ -304,8 +304,8 @@ class SGC_Swarm:
         return node
 
     def send_routing_request_service(self, addr,topic_name, topic_type, source_or_destination, sender_url_str, receiver_url_str, connection_type):
-        sender_url = generate_hashed_name([sender_url_str, topic_name, topic_type])
-        receiver_url = generate_hashed_name([receiver_url_str, topic_name, topic_type])
+        sender_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
+        receiver_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
         url_name = sender_url + receiver_url
         self.logger.info(f"send routing request service {url_name}")
         def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):

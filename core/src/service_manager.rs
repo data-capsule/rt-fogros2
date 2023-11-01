@@ -524,13 +524,14 @@ pub struct RosTopicStatus {
     pub action: String,
 }
 
-
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct RoutingManagerRequest {
     action: FibChangeAction,
     topic_name: String,
     topic_type: String,
     certificate: Vec<u8>,
     connection_type: Option<String>,
+    communication_url: Option<String>,
 }
 
 async fn sender_network_routing_thread_manager(
@@ -548,6 +549,12 @@ async fn sender_network_routing_thread_manager(
         let certificate = request.certificate.clone();
         let fib_tx = fib_tx.clone();
         let channel_tx = channel_tx.clone();
+        let communication_channel_url = request.communication_url.clone();
+        let channel_gdp_name = GDPName(get_gdp_name_from_topic(
+            communication_channel_url.unwrap().as_str(),
+            &topic_type,
+            &certificate,
+        ));
         let topic_gdp_name = GDPName(get_gdp_name_from_topic(
             &topic_name,
             &topic_type,
@@ -560,13 +567,15 @@ async fn sender_network_routing_thread_manager(
             "sub" => FibConnectionType::SENDER,
             _ => FibConnectionType::BIDIRECTIONAL,
         };
+        info!("request {:?}", request);
+        warn!("sender_network_routing_thread_manager {:?}", connection_type);
 
         allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
         let sender_listening_gdp_name = generate_random_gdp_name();
 
         // currently open another synchronous connection for put and get
-        let sender_topic = format!("{}-sender", gdp_name_to_string(topic_gdp_name));
-        let receiver_topic = format!("{}-receiver", gdp_name_to_string(topic_gdp_name));
+        let sender_topic = format!("{}-sender", gdp_name_to_string(channel_gdp_name));
+        let receiver_topic = format!("{}-receiver", gdp_name_to_string(channel_gdp_name));
 
         let redis_addr_and_port = get_redis_address_and_port();
         let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
@@ -712,16 +721,22 @@ async fn receiver_network_routing_thread_manager(
         let topic_name = request.topic_name.clone();
         let topic_type = request.topic_type.clone();
         let certificate = request.certificate.clone();
+        let communication_channel_url = request.communication_url.clone();
         let topic_gdp_name = GDPName(get_gdp_name_from_topic(
             &topic_name,
+            &topic_type,
+            &certificate,
+        ));
+        let channel_gdp_name = GDPName(get_gdp_name_from_topic(
+            communication_channel_url.unwrap().as_str(),
             &topic_type,
             &certificate,
         ));
         let redis_url = get_redis_url();
         allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
         // currently open another synchronous connection for put and get
-        let sender_topic = format!("{}-sender", gdp_name_to_string(topic_gdp_name));
-        let receiver_topic = format!("{}-receiver", gdp_name_to_string(topic_gdp_name));
+        let sender_topic = format!("{}-sender", gdp_name_to_string(channel_gdp_name));
+        let receiver_topic = format!("{}-receiver", gdp_name_to_string(channel_gdp_name));
 
         let redis_addr_and_port = get_redis_address_and_port();
         let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
@@ -849,6 +864,7 @@ async fn receiver_network_routing_thread_manager(
                             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                             let fib_tx_clone = fib_tx.clone();
                             let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                            tokio::time::sleep(Duration::from_millis(10000)).await;
                             // let topic_name_clone = topic_name.clone();
                             // let topic_type_clone = topic_type.clone();
                             // let certificate_clone = certificate.clone();
@@ -1083,7 +1099,8 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     topic_name: topic_name,
                                     topic_type: topic_type,
                                     certificate: certificate.clone(),
-                                    connection_type: Some(payload.connection_type.unwrap()),      
+                                    connection_type: Some(payload.connection_type.unwrap()),  
+                                    communication_url: Some(payload.forward_sender_url.unwrap()),    
                                 }).expect("sender routing tx failure");
                             }
 
@@ -1107,6 +1124,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     topic_type: topic_type,
                                     certificate: certificate.clone(),
                                     connection_type: Some(payload.connection_type.unwrap()),
+                                    communication_url: Some(payload.forward_receiver_url.unwrap()),
                                 }).expect("receiver routing tx failure");
                             }
                             _ => {
