@@ -119,7 +119,7 @@ class SGC_Swarm:
                         else:
                             self.logger.warn(f"adding topic {topic_name} to SGC router")
                             send_topic_request("add", topic_action, topic_name, topic_type, self.sgc_address)
-                            self.construct_tree_by_sending_request_topic(self.build_tree(self.config["topology"]), topic_name, topic_type)
+                            self.construct_tree_by_sending_request_topic(self.build_tree(self.config["topology"]), topic_name, topic_type, topic_action)
 
                 # add in new services 
                 if self.state_dict[current_state].services:
@@ -250,7 +250,7 @@ class SGC_Swarm:
             self.construct_tree_by_sending_request_service(child, topic_name, topic_type)
 
 
-    def construct_tree_by_sending_request_topic(self, node, topic_name, topic_type):
+    def construct_tree_by_sending_request_topic(self, node, topic_name, topic_type, topic_action):
         for child in node.children:
             # uniquely identify the session
             session_id = node.address + child.address
@@ -264,7 +264,7 @@ class SGC_Swarm:
                     "source",
                     "topic" + node.address + session_id,
                     "topic" + child.address + session_id,
-                    "pub"
+                    topic_action #"pub"
                 )
             if child.address == self.instance_identifer:
                 self.send_routing_request_topic(
@@ -274,10 +274,10 @@ class SGC_Swarm:
                     "destination",
                     "topic" + node.address + session_id,
                     "topic" + child.address + session_id,
-                    "pub"
+                    topic_action #"pub"
                 )
 
-            self.construct_tree_by_sending_request_topic(child, topic_name, topic_type)
+            self.construct_tree_by_sending_request_topic(child, topic_name, topic_type, topic_action)
 
     # def build_mcast_tree(self, node_dict, parent=None):
     #     address = node_dict.get("address")
@@ -333,8 +333,8 @@ class SGC_Swarm:
             _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
 
     def send_routing_request_topic(self, addr, topic_name, topic_type, source_or_destination, sender_url_str, receiver_url_str, connection_type):
-        sender_url = generate_hashed_name([sender_url_str, topic_name, topic_type])
-        receiver_url = generate_hashed_name([receiver_url_str, topic_name, topic_type])
+        sender_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
+        receiver_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
         url_name = sender_url + receiver_url
         self.logger.info(f"send routing request topic {url_name}")
         def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
@@ -355,18 +355,12 @@ class SGC_Swarm:
             response = requests.post(uri, json = ros_topic)
             print(response)
             
-
         if source_or_destination == "source":
             _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
-            # update redis 
-            # self.redis_conn.set(url_name, "1")
+            # self.logger.info(f"set redis {url_name}")
         elif source_or_destination == "destination":
-            def _event_handler():
-                self.logger.info(f"event handler for {url_name}")
-                _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
-            # wait until the source redis is set using keyspace notification
-            # TODO: optimization having a unified thread for all of the keys
-            # self.redis_pubsub.psubscribe(**{f"__keyspace@0__:{url_name}/*": _event_handler})
+            _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
+
 
     # phase 1: only allow changing the state on state machine 
     # TODO: allowing changing the state machine (not a must)

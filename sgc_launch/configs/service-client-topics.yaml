@@ -12,15 +12,15 @@ services:
 state_machine: 
   standby: 
   client: 
-    # topics: 
-    #   - /chatter: sub 
-    services:
-      - /add_three_ints: client 
+    topics: 
+      - /chatter: pub 
+    # services:
+    #   - /add_three_ints: client 
   server: 
-    # topics: 
-    #   - /chatter: pub
-    services:
-      - /add_three_ints: service 
+    topics: 
+      - /chatter: sub
+    # services:
+    #   - /add_three_ints: service 
 
 assignment:
   machine_client: client

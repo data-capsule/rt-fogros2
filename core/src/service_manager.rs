@@ -369,7 +369,7 @@ pub async fn ros_topic_remote_publisher(
 
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
-                        connection_type: FibConnectionType::SENDER,
+                        connection_type: FibConnectionType::SENDER, // sender because to send to webrtc
                         topic_gdp_name: topic_gdp_name,
                         forward_destination: Some(ros_tx),
                         description: Some("ros topic send".to_string()),
@@ -475,7 +475,7 @@ pub async fn ros_topic_remote_subscriber(
 
                 let channel_update_msg = FibStateChange {
                     action: FibChangeAction::ADD,
-                    connection_type: FibConnectionType::RECEIVER,
+                    connection_type: FibConnectionType::RECEIVER, // receiver because to receive from webrtc
                     topic_gdp_name: topic_gdp_name,
                     forward_destination: Some(ros_tx),
                     description: Some("ros topic receive".to_string()),
@@ -589,7 +589,7 @@ async fn sender_network_routing_thread_manager(
 
         let receivers = get_entity_from_database(&redis_url, &receiver_topic)
             .expect("Cannot get receiver from database");
-        info!("receiver list {:?}", receivers);
+        info!("receiver list {:?} for key {}", receivers, receiver_topic);
 
         let tasks = receivers.clone().into_iter().map(|receiver| {
             let topic_name_clone = topic_name.clone();
@@ -864,7 +864,7 @@ async fn receiver_network_routing_thread_manager(
                             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                             let fib_tx_clone = fib_tx.clone();
                             let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
-                            tokio::time::sleep(Duration::from_millis(10000)).await;
+                            tokio::time::sleep(Duration::from_millis(1000)).await;
                             // let topic_name_clone = topic_name.clone();
                             // let topic_type_clone = topic_type.clone();
                             // let certificate_clone = certificate.clone();
