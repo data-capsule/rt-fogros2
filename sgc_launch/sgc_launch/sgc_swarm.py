@@ -251,8 +251,18 @@ class SGC_Swarm:
 
 
     def construct_tree_by_sending_request_topic(self, node, topic_name, topic_type, topic_action):
+        def reverse_pub_sub(topic_action):
+            if topic_action == "pub":
+                return "sub"
+            elif topic_action == "sub":
+                return "pub"
+            else:
+                self.logger.error(f"topic action {topic_action} is not supported")
+
+        self.logger.info(f"construct tree by sending request topic {node.address}")
         for child in node.children:
             # uniquely identify the session
+            # TODO: consider switch
             session_id = node.address + child.address
 
             if node.address == self.instance_identifer:
@@ -261,7 +271,7 @@ class SGC_Swarm:
                     self.sgc_address,
                     topic_name, 
                     topic_type,
-                    "source",
+                    topic_action,
                     "topic" + node.address + session_id,
                     "topic" + child.address + session_id,
                     topic_action #"pub"
@@ -271,7 +281,7 @@ class SGC_Swarm:
                     self.sgc_address,
                     topic_name, 
                     topic_type,
-                    "destination",
+                    (topic_action), # because child is the destination, we need to reverse the pub/sub
                     "topic" + node.address + session_id,
                     "topic" + child.address + session_id,
                     topic_action #"pub"
@@ -336,7 +346,7 @@ class SGC_Swarm:
         sender_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
         receiver_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
         url_name = sender_url + receiver_url
-        self.logger.info(f"send routing request topic {url_name}")
+        self.logger.info(f"send routing request topic {[sender_url_str, receiver_url_str, topic_name, topic_type]}")
         def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
             sleep(1)
             ros_topic = {
@@ -349,17 +359,18 @@ class SGC_Swarm:
                 "forward_sender_url": sender_url, 
                 "forward_receiver_url": receiver_url
             }
-            print(addr, ros_topic)
+            self.logger.info(ros_topic.__str__())
             uri = f"http://{addr}/topic"
             # Create a new resource
             response = requests.post(uri, json = ros_topic)
             print(response)
+        _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
+
+        # if source_or_destination == "pub":
             
-        if source_or_destination == "source":
-            _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
-            # self.logger.info(f"set redis {url_name}")
-        elif source_or_destination == "destination":
-            _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
+        #     # self.logger.info(f"set redis {url_name}")
+        # elif source_or_destination == "sub":
+        #     _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type)
 
 
     # phase 1: only allow changing the state on state machine 
