@@ -14,13 +14,13 @@ state_machine:
   client: 
     topics: 
       - /chatter: sub 
-    # services:
-    #   - /add_three_ints: client 
+    services:
+      - /add_three_ints: client 
   server: 
     topics: 
       - /chatter: pub
-    # services:
-    #   - /add_three_ints: service 
+    services:
+      - /add_three_ints: service 
 
 assignment:
   machine_client: client

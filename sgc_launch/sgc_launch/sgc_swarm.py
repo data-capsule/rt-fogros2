@@ -314,12 +314,16 @@ class SGC_Swarm:
         return node
 
     def send_routing_request_service(self, addr,topic_name, topic_type, source_or_destination, sender_url_str, receiver_url_str, connection_type):
-        sender_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
-        receiver_url = generate_hashed_name([sender_url_str, receiver_url_str, topic_name, topic_type])
+        
+        information_used_to_generate_unique_name = [sender_url_str, receiver_url_str, topic_name, topic_type, connection_type]
+        
+        sender_url = generate_hashed_name(information_used_to_generate_unique_name)
+        receiver_url = generate_hashed_name(information_used_to_generate_unique_name)
         url_name = sender_url + receiver_url
-        self.logger.info(f"send routing request service {url_name}")
+        
         def _send_request(addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type):
             sleep(1)
+            self.logger.info(f"send routing request service {[addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type]}")
             ros_topic = {
                 "api_op": "routing",
                 "ros_op": source_or_destination,

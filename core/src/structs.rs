@@ -214,10 +214,6 @@ pub fn get_gdp_name_from_topic(topic_name: &str, topic_type: &str, cert: &[u8]) 
     // create a Sha256 object
     let mut hasher = Sha256::new();
 
-    info!(
-        "Name is generated from topic_name: {}, topic_type: {}, cert: (too long, not printed)",
-        topic_name, topic_type
-    );
     // hash with name, type and certificate
     hasher.update(topic_name);
     hasher.update(topic_type);
@@ -226,7 +222,10 @@ pub fn get_gdp_name_from_topic(topic_name: &str, topic_type: &str, cert: &[u8]) 
     // Get the first 4 bytes of the digest
     let mut bytes = [0u8; 4];
     bytes.copy_from_slice(&result[..4]);
-
+    info!(
+        "Name {:?} is generated from topic_name: {}, topic_type: {}, cert: (too long, not printed)",
+        bytes, topic_name, topic_type
+    );
     bytes
     // // Convert the bytes to a u32
     // unsafe { transmute::<[u8; 4], u32>(bytes) }
