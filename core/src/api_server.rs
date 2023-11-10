@@ -42,6 +42,7 @@ async fn root() -> &'static str {
     "Hello, World!"
 }
 
+#[allow(dead_code)]
 #[axum_macros::debug_handler]
 // basic handler that responds with a static string
 async fn handle_ros_topic(
@@ -78,25 +79,25 @@ async fn handle_ros_service(
 }
 
 
-
-pub async fn ros_api_server(topic_request_tx: UnboundedSender<ROSTopicRequest>, service_request_tx: UnboundedSender<ROSTopicRequest>) {
+pub async fn ros_api_server(
+    topic_request_tx: UnboundedSender<ROSTopicRequest>,
+    service_request_tx: UnboundedSender<ROSTopicRequest>,
+) {
     let app_state = Arc::new(AppState {
         tx: topic_request_tx,
-        service_tx : service_request_tx,
+        service_tx: service_request_tx,
     });
     // build our application with a route
     let app = Router::new()
         .route("/", get(root))
-        .route("/topic", post(handle_ros_topic))
+        .route("/topic", post(handle_ros_service))
         .route("/service", post(handle_ros_service))
         .with_state(app_state);
 
-        let api_port = match env::var_os("SGC_API_PORT") {
-            Some(port) => {
-                port.into_string().unwrap().parse().unwrap()
-            }
-            None => 3000
-        };
+    let api_port = match env::var_os("SGC_API_PORT") {
+        Some(port) => port.into_string().unwrap().parse().unwrap(),
+        None => 3000,
+    };
 
     // run our app with hyper
     // `axum::Server` is a re-export of `hyper::Server`

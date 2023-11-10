@@ -1,25 +1,26 @@
-use crate::{
-    structs::{GDPName, GDPPacket, GdpAction},
-};
+use crate::structs::{GDPName, GDPPacket, GdpAction};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::collections::HashSet;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
     ADD,
-    PAUSE, // pausing the forwarding of the topic, keeping connections alive
+    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
     PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME, // resume a paused topic
-    DELETE, // deleting a local topic interface and all its connections 
+    RESUME,   // resume a paused topic
+    DELETE,   // deleting a local topic interface and all its connections
+    STATE,    // save the state of the topic
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibConnectionType {
     REQUEST,
     RESPONSE,
+    SENDER,
+    RECEIVER,
     BIDIRECTIONAL,
 }
 
@@ -29,7 +30,7 @@ pub enum TopicStateInFIB {
     PAUSED,
     DELETED,
 }
- 
+
 #[derive(Debug)]
 pub struct FibStateChange {
     pub action: FibChangeAction,
@@ -43,7 +44,7 @@ pub struct FibStateChange {
 pub struct FibConnection {
     pub state: TopicStateInFIB,
     pub connection_type: FibConnectionType,
-    tx: UnboundedSender<GDPPacket>, 
+    tx: UnboundedSender<GDPPacket>,
     pub description: Option<String>,
 }
 
@@ -76,7 +77,22 @@ pub async fn service_connection_fib_handler(
 
                 match pkt.action {
                     GdpAction::Forward => {
-                        warn!("forward????")
+                        let topic_state = rib_state_table.get(&pkt.gdpname);
+                        info!("the current topic state is {:?}", topic_state);
+                        match topic_state {
+                            Some(s) => {
+                                for dst in &s.receivers {
+                                    if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
+                                        let _ = dst.tx.send(pkt.clone());
+                                    } else {
+                                        warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
+                                    }
+                                }
+                            },
+                            None => {
+                                error!("The gdpname {:?} does not exist", pkt.gdpname)
+                            }
+                        }
                     },
                     GdpAction::Request => {
                         info!("received GDP request {}", pkt);
@@ -126,7 +142,7 @@ pub async fn service_connection_fib_handler(
                                     error!("The gdpname {:?} does not exist", pkt.gdpname)
                                 }
                             }
-                            // send it back with response forwarding table 
+                            // send it back with response forwarding table
                             // let dst = response_forwarding_table.get(&pkt.gdpname);
                             // match dst {
                             //     Some(v) => {
@@ -136,14 +152,15 @@ pub async fn service_connection_fib_handler(
                             //         error!("the response channel does not exist");
                             //     }
                             // }
-                        }  
+                        }
                     },
+
                     _ => {
                         error!("Unknown action {:?}", pkt.action);
                         continue;
                     }
                 }
-                
+
             }
 
 
@@ -157,15 +174,17 @@ pub async fn service_connection_fib_handler(
                             Some(v) => {
                                 // v.state = TopicStateInFIB::RUNNING;
                                 // v.receivers.push(update.forward_destination.unwrap());
+                                info!("local topic interface {:?} is added", update);
                                 v.receivers.push(FibConnection{
                                     state: TopicStateInFIB::RUNNING,
                                     connection_type: update.connection_type,
                                     tx: update.forward_destination.unwrap(),
                                     description: update.description,
                                 });
+                                
                             }
                             None =>{
-                                info!("Creating a new entry of gdp name {:?}", update.topic_gdp_name);
+                                info!("Creating a new entry of {:?}", update);
                                 // let state = FIBState {
                                 //     state: TopicStateInFIB::RUNNING,
                                 //     receivers: vec!(update.forward_destination.unwrap()),
@@ -185,6 +204,9 @@ pub async fn service_connection_fib_handler(
                             }
                         };
                         // TODO: pause add
+                    },
+                    FibChangeAction::STATE => {
+                        
                     },
                     // FibChangeAction::RESPONSE => {
                     //     info!("Response channel received {:?}", update);

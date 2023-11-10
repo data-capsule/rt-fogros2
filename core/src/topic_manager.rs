@@ -20,7 +20,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 
 use crate::db::*;
-use futures::{StreamExt};
+use futures::StreamExt;
 use redis_async::{client, resp::FromResp};
 
 use tokio::sync::mpsc::{self};
@@ -65,7 +65,7 @@ pub async fn ros_topic_remote_publisher_handler(
             .spin_once(std::time::Duration::from_millis(10));
     });
 
-    let mut existing_topics = vec!();
+    let mut existing_topics = vec![];
 
     loop {
         tokio::select! {
@@ -130,7 +130,7 @@ pub async fn ros_topic_remote_publisher_handler(
                         }
                     });
                     join_handles.push(ros_handle);
-                }   
+                }
             }
         }
     }
@@ -168,7 +168,7 @@ pub async fn ros_topic_remote_subscriber_handler(
     });
 
 
-    let mut existing_topics = vec!();
+    let mut existing_topics = vec![];
 
     loop {
         tokio::select! {
@@ -246,7 +246,7 @@ pub async fn ros_topic_remote_subscriber_handler(
                     });
                     join_handles.push(ros_handle);
                 }
-                
+
             }
         }
     }
@@ -566,17 +566,14 @@ pub async fn ros_topic_manager(mut topic_request_rx: UnboundedReceiver<ROSTopicR
     // TODO: now it's hardcoded, make it changable later
     let crypto_name = "test_cert";
     let crypto_path = match env::var_os("SGC_CRYPTO_PATH") {
-        Some(config_file) => {
-            config_file.into_string().unwrap()
-        },
+        Some(config_file) => config_file.into_string().unwrap(),
         None => format!(
             "./sgc_launch/configs/crypto/{}/{}-private.pem",
             crypto_name, crypto_name
         ),
     };
-    
-    let certificate = std::fs::read(crypto_path)
-    .expect("crypto file not found!");
+
+    let certificate = std::fs::read(crypto_path).expect("crypto file not found!");
 
 
     let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
@@ -587,7 +584,7 @@ pub async fn ros_topic_manager(mut topic_request_rx: UnboundedReceiver<ROSTopicR
 
     let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
     let topic_creator_handle = tokio::spawn(async move {
-        // This is because the ROS node creation is not thread safe 
+        // This is because the ROS node creation is not thread safe
         // See: https://github.com/ros2/rosbag2/issues/329
         std::thread::sleep(std::time::Duration::from_millis(500));
         ros_topic_remote_subscriber_handler(subscriber_operation_rx).await;
@@ -656,7 +653,7 @@ pub async fn ros_topic_manager(mut topic_request_rx: UnboundedReceiver<ROSTopicR
                     },
                     "del" => {
                         info!("deleting topic {:?}", payload);
-                        
+
                         match payload.ros_op.as_str() {
                             "pub" => {
                                 let topic_operation_tx = publisher_operation_tx.clone();
@@ -669,7 +666,7 @@ pub async fn ros_topic_manager(mut topic_request_rx: UnboundedReceiver<ROSTopicR
                                 };
                                 let _ = topic_operation_tx.send(topic_creator_request);
 
-                            }, 
+                            },
                             "sub" => {
                                 let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicModificationRequest {
@@ -685,10 +682,10 @@ pub async fn ros_topic_manager(mut topic_request_rx: UnboundedReceiver<ROSTopicR
                                 warn!("unknown action {}", payload.ros_op);
                             }
                         }
-                    },               
+                    },
                     "resume" => {
                         info!("resuming topic {:?}", payload);
-                        
+
                         match payload.ros_op.as_str() {
                             "pub" => {
                                 let topic_operation_tx = publisher_operation_tx.clone();
@@ -701,7 +698,7 @@ pub async fn ros_topic_manager(mut topic_request_rx: UnboundedReceiver<ROSTopicR
                                 };
                                 let _ = topic_operation_tx.send(topic_creator_request);
 
-                            }, 
+                            },
                             "sub" => {
                                 let topic_operation_tx = subscriber_operation_tx.clone();
                                 let topic_creator_request = TopicModificationRequest {

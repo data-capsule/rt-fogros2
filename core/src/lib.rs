@@ -14,9 +14,9 @@ pub mod db;
 pub mod pipeline;
 // util
 pub mod commands;
-pub mod topic_manager;
 pub mod service_manager;
 pub mod service_request_manager;
+pub mod topic_manager;
 pub mod util;
 use utils::error::Result;
 

@@ -1,7 +1,4 @@
-
-use crate::{
-    structs::{GDPName, GDPPacket},
-};
+use crate::structs::{GDPName, GDPPacket};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -10,10 +7,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
     ADD,
-    PAUSE, // pausing the forwarding of the topic, keeping connections alive
+    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
     PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME, // resume a paused topic
-    DELETE, // deleting a local topic interface and all its connections 
+    RESUME,   // resume a paused topic
+    DELETE,   // deleting a local topic interface and all its connections
     RESPONSE,
 }
 
@@ -311,4 +308,3 @@ pub async fn connection_fib_handler(
 //                 Some(update) = stat_rs.recv() => {
 //                     // Note: incomplete implementation, only support flushing advertisement
 //                     let dst = update.sink;
-//    

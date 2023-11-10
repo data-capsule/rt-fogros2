@@ -32,7 +32,7 @@ fn main() -> Result<()> {
     //     }
     //     None => "./src/resources/automatic.toml".to_owned(),
     // };
-    
+
     // println!("Using config file : {}", include_path);
     // let config_contents = fs::read_to_string(include_path).expect("config file not found!");
 
