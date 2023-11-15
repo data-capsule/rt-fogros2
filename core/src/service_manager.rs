@@ -597,7 +597,7 @@ async fn sender_network_routing_thread_manager(
             let tasks = receivers.clone().into_iter().map(|receiver| {
                 let topic_name_clone = topic_name.clone();
                 let topic_type_clone = topic_type.clone();
-                let certificate_clone = certificate.clone();
+                let _certificate_clone = certificate.clone();
                 let sender_topic = sender_topic.clone();
                 let channel_tx = channel_tx.clone();
                 let fib_tx_clone = fib_tx.clone();
@@ -629,7 +629,7 @@ async fn sender_network_routing_thread_manager(
                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                     // let sender_url = "sender".to_string();
                     
-                    let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                    let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
                         topic_gdp_name: topic_gdp_name,
@@ -690,7 +690,7 @@ async fn sender_network_routing_thread_manager(
 
                         let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                         // let sender_url = "sender".to_string();
-                        let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx.clone(), local_to_rtc_rx));
+                        let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx.clone(), local_to_rtc_rx));
                         let channel_update_msg = FibStateChange {
                             action: FibChangeAction::ADD,
                             topic_gdp_name: topic_gdp_name,
@@ -727,7 +727,7 @@ async fn receiver_network_routing_thread_manager(
         let fib_tx = fib_tx.clone();
             tokio::spawn(async move {
             let receiver_listening_gdp_name = generate_random_gdp_name();
-            let redis_url = get_redis_url();
+            let _redis_url = get_redis_url();
             let topic_name = request.topic_name.clone();
             let topic_type = request.topic_type.clone();
             let certificate = request.certificate.clone();
@@ -771,9 +771,9 @@ async fn receiver_network_routing_thread_manager(
             info!("sender list {:?}", senders);
 
             let tasks = senders.clone().into_iter().map(|sender| {
-                let topic_name_clone = topic_name.clone();
-                let topic_type_clone = topic_type.clone();
-                let certificate_clone = certificate.clone();
+                let _topic_name_clone = topic_name.clone();
+                let _topic_type_clone = topic_type.clone();
+                let _certificate_clone = certificate.clone();
                 let receiver_listening_gdp_name_clone = receiver_listening_gdp_name.clone();
                 if !sender.ends_with(&gdp_name_to_string(receiver_listening_gdp_name_clone)) {
                     info!(
@@ -821,7 +821,7 @@ async fn receiver_network_routing_thread_manager(
                     // workaround to prevent receiver from dialing before sender is listening
                     tokio::time::sleep(Duration::from_millis(1000)).await;
                     info!("receiver starts to register webrtc stream");
-                    let webrtc_stream =
+                    let _webrtc_stream =
                         register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
                     info!("receiver registered webrtc stream");
 
@@ -873,7 +873,7 @@ async fn receiver_network_routing_thread_manager(
                                 info!("receiver registered webrtc stream");
                                 let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 let fib_tx_clone = fib_tx.clone();
-                                let rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                                let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
                                 // let topic_name_clone = topic_name.clone();
                                 // let topic_type_clone = topic_type.clone();
