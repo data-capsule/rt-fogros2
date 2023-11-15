@@ -1,7 +1,10 @@
 use crate::api_server::ROSTopicRequest;
 
 
-use crate::db::{get_redis_url, allow_keyspace_notification, get_redis_address_and_port, get_entity_from_database, add_entity_to_database_as_transaction};
+use crate::db::{
+    add_entity_to_database_as_transaction, allow_keyspace_notification, get_entity_from_database,
+    get_redis_address_and_port, get_redis_url,
+};
 #[cfg(feature = "ros")]
 use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
 
@@ -11,7 +14,8 @@ use crate::pipeline::{
 };
 use crate::service_request_manager::{service_connection_fib_handler, FibConnectionType};
 use crate::structs::{
-    generate_gdp_name_from_string, get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet, generate_random_gdp_name, gdp_name_to_string,
+    gdp_name_to_string, generate_gdp_name_from_string, generate_random_gdp_name,
+    get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet,
 };
 
 use crate::service_request_manager::{FibChangeAction, FibStateChange};
@@ -536,8 +540,7 @@ pub struct RoutingManagerRequest {
 
 // fib -> webrtc
 async fn sender_network_routing_thread_manager(
-    mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
-    fib_tx: UnboundedSender<GDPPacket>,
+    mut request_rx: UnboundedReceiver<RoutingManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
 ) {
     // let mut streams = Arc::new(Mutex::new(vec![]);
@@ -571,7 +574,10 @@ async fn sender_network_routing_thread_manager(
                 _ => FibConnectionType::BIDIRECTIONAL,
             };
             info!("handling routing request {:?}", request);
-            warn!("sender_network_routing_thread_manager {:?}", connection_type);
+            warn!(
+                "sender_network_routing_thread_manager {:?}",
+                connection_type
+            );
 
             allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
             let sender_listening_gdp_name = generate_random_gdp_name();
@@ -601,7 +607,6 @@ async fn sender_network_routing_thread_manager(
                 let sender_topic = sender_topic.clone();
                 let channel_tx = channel_tx.clone();
                 let fib_tx_clone = fib_tx.clone();
-                
                 let redis_url = redis_url.clone();
                 let sender_listening_gdp_name_clone = sender_listening_gdp_name.clone();
 
@@ -627,8 +632,6 @@ async fn sender_network_routing_thread_manager(
                     info!("sender registered webrtc stream");
 
                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                    // let sender_url = "sender".to_string();
-                    
                     let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
@@ -641,91 +644,91 @@ async fn sender_network_routing_thread_manager(
                     info!("remote sender sent channel update message");
             })
         });
-        let mut tasks = tasks.collect::<Vec<_>>();
+            let mut tasks = tasks.collect::<Vec<_>>();
 
-        let message_handling_task_handle = tokio::spawn(async move {
-            loop {
-                let message = msgs.next().await;
-                match message {
-                    Some(message) => {
-                        let received_operation = String::from_resp(message.unwrap()).unwrap();
-                        info!("KVS {}", received_operation);
-                        if received_operation != "lpush" {
-                            info!("the operation is not lpush, ignore");
-                            continue;
-                        }
-                        let updated_receivers =
-                            get_entity_from_database(&redis_url, &receiver_topic)
-                                .expect("Cannot get receiver from database");
-                        info!(
-                            "get a list of receivers from KVS {:?}",
-                            updated_receivers
-                        );
-                        let receiver = updated_receivers.first().unwrap(); // first or last?
-                        if receivers.clone().contains(receiver) {
-                            warn!("receiver {} already in the list, ignore", receiver);
-                            continue;
-                        }
-                        let sender_url = format!(
-                            "{},{},{}",
-                            gdp_name_to_string(topic_gdp_name),
-                            gdp_name_to_string(sender_listening_gdp_name),
-                            receiver
-                        );
-                        info!("sender listening for signaling url {}", sender_url);
+            let message_handling_task_handle = tokio::spawn(async move {
+                loop {
+                    let message = msgs.next().await;
+                    match message {
+                        Some(message) => {
+                            let received_operation = String::from_resp(message.unwrap()).unwrap();
+                            info!("KVS {}", received_operation);
+                            if received_operation != "lpush" {
+                                info!("the operation is not lpush, ignore");
+                                continue;
+                            }
+                            let updated_receivers =
+                                get_entity_from_database(&redis_url, &receiver_topic)
+                                    .expect("Cannot get receiver from database");
+                            info!("get a list of receivers from KVS {:?}", updated_receivers);
+                            let receiver = updated_receivers.first().unwrap(); // first or last?
+                            if receivers.clone().contains(receiver) {
+                                warn!("receiver {} already in the list, ignore", receiver);
+                                continue;
+                            }
+                            let sender_url = format!(
+                                "{},{},{}",
+                                gdp_name_to_string(topic_gdp_name),
+                                gdp_name_to_string(sender_listening_gdp_name),
+                                receiver
+                            );
+                            info!("sender listening for signaling url {}", sender_url);
 
-                        add_entity_to_database_as_transaction(
-                            &redis_url,
-                            &sender_topic,
-                            &sender_url,
-                        )
-                        .expect("Cannot add sender to database");
-                        info!(
-                            "sender {} added to database of channel {}",
-                            &sender_url, sender_topic
-                        );
+                            add_entity_to_database_as_transaction(
+                                &redis_url,
+                                &sender_topic,
+                                &sender_url,
+                            )
+                            .expect("Cannot add sender to database");
+                            info!(
+                                "sender {} added to database of channel {}",
+                                &sender_url, sender_topic
+                            );
 
-                        let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
-                        info!("sender registered webrtc stream");
+                            let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
+                            info!("sender registered webrtc stream");
 
-                        let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                        // let sender_url = "sender".to_string();
-                        let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx.clone(), local_to_rtc_rx));
-                        let channel_update_msg = FibStateChange {
+                            let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                            // let sender_url = "sender".to_string();
+                            let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(
+                                webrtc_stream,
+                                fib_tx.clone(),
+                                local_to_rtc_rx,
+                            ));
+                            let channel_update_msg = FibStateChange {
                             action: FibChangeAction::ADD,
                             topic_gdp_name: topic_gdp_name,
                             connection_type: connection_type,
                             forward_destination: Some(local_to_rtc_tx),
                             description: Some(format!("webrtc stream for topic_name {}, topic_type {}, receiver {}, connection_type {:?}", topic_name, topic_type, receiver, connection_type)),
                         };
-                        let _ = channel_tx.send(channel_update_msg);
-                        info!("remote sender sent channel update message");
-                    }
-                    None => {
-                        info!("message is none");
+                            let _ = channel_tx.send(channel_update_msg);
+                            info!("remote sender sent channel update message");
+                        }
+                        None => {
+                            info!("message is none");
+                        }
                     }
                 }
-            }
+            });
+            tasks.push(message_handling_task_handle);
+            futures::future::join_all(tasks).await;
+            info!("all the mailboxes are checked!");
         });
-        tasks.push(message_handling_task_handle);
-        futures::future::join_all(tasks).await;
-        info!("all the mailboxes are checked!");
-    });
     }
-    
+
     // Wait for all tasks to complete
     // futures::future::join_all(join_handles).await;
 }
 
 
-// webrtc -> fib 
+// webrtc -> fib
 async fn receiver_network_routing_thread_manager(
-    mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
-    fib_tx: UnboundedSender<GDPPacket>,
+    mut request_rx: UnboundedReceiver<RoutingManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
 ) {
     while let Some(request) = request_rx.recv().await {
         let fib_tx = fib_tx.clone();
-            tokio::spawn(async move {
+        tokio::spawn(async move {
             let receiver_listening_gdp_name = generate_random_gdp_name();
             let _redis_url = get_redis_url();
             let topic_name = request.topic_name.clone();
@@ -824,7 +827,6 @@ async fn receiver_network_routing_thread_manager(
                     let _webrtc_stream =
                         register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
                     info!("receiver registered webrtc stream");
-
                 })
             });
 
@@ -894,8 +896,8 @@ async fn receiver_network_routing_thread_manager(
                         }
                     }
                 }
-        }
-    });
+            }
+        });
     }
 }
 
@@ -928,8 +930,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     let fib_tx_clone = fib_tx.clone();
 
     let service_creator_handle = tokio::spawn(async move {
-        ros_remote_service_provider(client_operation_rx, fib_tx_clone, channel_tx_clone)
-            .await;
+        ros_remote_service_provider(client_operation_rx, fib_tx_clone, channel_tx_clone).await;
     });
     waiting_rib_handles.push(service_creator_handle);
 
@@ -963,25 +964,17 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
 
     let fib_tx_clone = fib_tx.clone();
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
-    let sender_routing_manager_handle = tokio::spawn(
-        async move { sender_network_routing_thread_manager(
-            sender_routing_rx, 
-            fib_tx_clone, 
-            channel_tx.clone()
-        ).await 
-        }
-    );
+    let sender_routing_manager_handle = tokio::spawn(async move {
+        sender_network_routing_thread_manager(sender_routing_rx, fib_tx_clone, channel_tx.clone())
+            .await
+    });
     waiting_rib_handles.push(sender_routing_manager_handle);
 
     let fib_tx_clone = fib_tx.clone();
     let (receiver_routing_tx, receiver_routing_rx) = mpsc::unbounded_channel();
-    let receiver_routing_manager_handle = tokio::spawn(
-        async move { receiver_network_routing_thread_manager(
-            receiver_routing_rx, 
-            fib_tx_clone
-        ).await 
-        }
-    );
+    let receiver_routing_manager_handle = tokio::spawn(async move {
+        receiver_network_routing_thread_manager(receiver_routing_rx, fib_tx_clone).await
+    });
     waiting_rib_handles.push(receiver_routing_manager_handle);
 
 
@@ -1076,8 +1069,8 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     topic_name: topic_name,
                                     topic_type: topic_type,
                                     certificate: certificate.clone(),
-                                    connection_type: Some(payload.connection_type.unwrap()),  
-                                    communication_url: Some(payload.forward_sender_url.unwrap()),    
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                    communication_url: Some(payload.forward_sender_url.unwrap()),
                                 }).expect("sender routing tx failure");
                             }
 
@@ -1099,8 +1092,8 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                                     topic_name: topic_name,
                                     topic_type: topic_type,
                                     certificate: certificate.clone(),
-                                    connection_type: Some(payload.connection_type.unwrap()),  
-                                    communication_url: Some(payload.forward_sender_url.unwrap()),    
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                    communication_url: Some(payload.forward_sender_url.unwrap()),
                                 }).expect("sender routing tx failure");
                             }
 

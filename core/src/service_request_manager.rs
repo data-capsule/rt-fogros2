@@ -181,7 +181,7 @@ pub async fn service_connection_fib_handler(
                                     tx: update.forward_destination.unwrap(),
                                     description: update.description,
                                 });
-                                
+
                             }
                             None =>{
                                 info!("Creating a new entry of {:?}", update);
@@ -206,7 +206,7 @@ pub async fn service_connection_fib_handler(
                         // TODO: pause add
                     },
                     FibChangeAction::STATE => {
-                        
+
                     },
                     // FibChangeAction::RESPONSE => {
                     //     info!("Response channel received {:?}", update);
