@@ -18,6 +18,7 @@ pub mod service_manager;
 pub mod service_request_manager;
 pub mod topic_manager;
 pub mod util;
+pub mod logger;
 use utils::error::Result;
 
 pub fn start() -> Result<()> {

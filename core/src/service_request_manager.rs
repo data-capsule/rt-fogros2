@@ -1,9 +1,15 @@
+use crate::logger::{Logger, handle_logs};
 use crate::structs::{GDPName, GDPPacket, GdpAction};
 use serde::{Deserialize, Serialize};
+use tokio::fs::OpenOptions;
+use tokio::sync::mpsc;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::SystemTime;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt; // for write_all()
+use chrono;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
@@ -71,6 +77,14 @@ pub async fn service_connection_fib_handler(
 
     let mut processed_requests = HashSet::new();
 
+    let mut request_latency_table: HashMap<GDPName, SystemTime> = HashMap::new();
+
+    let (tx, rx) = mpsc::unbounded_channel();
+    let logger = Logger::new(tx);
+
+    let file_name = format!("/tmp/latency-{}.log", chrono::offset::Local::now().timestamp());
+    let log_handler = tokio::spawn(handle_logs(rx, file_name));
+
     loop {
         tokio::select! {
             Some(pkt) = fib_rx.recv() => {
@@ -97,6 +111,7 @@ pub async fn service_connection_fib_handler(
                     GdpAction::Request => {
                         info!("received GDP request {}", pkt);
                         warn!("request: {:?}", pkt.guid);
+                        logger.log(format!(""));
                         if processed_requests.contains(&pkt.guid) {
                             warn!("the request is processed, thrown away");
                             continue;
@@ -107,6 +122,7 @@ pub async fn service_connection_fib_handler(
                             Some(s) => {
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUEST {
+                                        request_latency_table.insert(pkt.gdpname, SystemTime::now());
                                         let _ = dst.tx.send(pkt.clone());
                                     } else {
                                         warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
@@ -119,8 +135,10 @@ pub async fn service_connection_fib_handler(
                         }
                     },
                     GdpAction::Response => {
-                        info!("received GDP response {}", pkt);
-                        warn!("response: {:?}", pkt.guid);
+                        info!("received GDP response {:?}", pkt);
+                        warn!("response: {:?} from {:?}", pkt.guid, pkt.source);
+                        let processing_time = SystemTime::now().duration_since(request_latency_table.get(&pkt.gdpname).unwrap().clone()).unwrap();
+                        logger.log(format!("{}, {}", pkt.source, processing_time.as_micros()));
                         if processed_requests.contains(&pkt.guid) {
                             warn!("the request is processed, thrown away");
                             continue;

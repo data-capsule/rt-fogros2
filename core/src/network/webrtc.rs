@@ -35,6 +35,7 @@ pub fn parse_header_payload_pairs(
     let default_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
         action: GdpAction::Noop,
         destination: GDPName([0u8, 0, 0, 0]),
+        source: GDPName([0u8, 0, 0, 0]),
         guid: GDPName([0u8, 0, 0, 0]),
         length: 0, // doesn't have any payload
     };
@@ -192,6 +193,7 @@ pub async fn webrtc_reader_and_writer(
     let mut remaining_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
         action: GdpAction::Noop,
         destination: GDPName([0u8, 0, 0, 0]),
+        source: GDPName([0u8, 0, 0, 0]),
         guid: GDPName([0u8, 0, 0, 0]),
         length: 0, // doesn't have any payload
     };
@@ -257,7 +259,7 @@ pub async fn webrtc_reader_and_writer(
 
                     info!("the total received payload with size {:} with gdp header length {}",  payload.len(), header.length);
 
-                    let packet = construct_gdp_packet_with_guid(deserialized.action, deserialized.destination,  thread_name, payload, deserialized.guid);
+                    let packet = construct_gdp_packet_with_guid(deserialized.action, deserialized.destination, deserialized.source, payload, deserialized.guid);
                         match ros_tx.send(packet) {
                             Ok(_) => {},
                             Err(_) => {warn!("request is being handled by another connection");},

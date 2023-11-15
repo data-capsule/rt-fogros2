@@ -69,6 +69,7 @@ pub async fn ros_remote_service_provider(
     let node = Arc::new(Mutex::new(
         r2r::Node::create(ctx, "sgc_remote_service", "namespace").expect("node creation failure"),
     ));
+    let unique_ros_node_gdp_name = generate_random_gdp_name();
 
     let ros_manager_node_clone = node.clone();
     let _handle = tokio::task::spawn_blocking(move || loop {
@@ -135,16 +136,6 @@ pub async fn ros_remote_service_provider(
                     .create_service_untyped(&topic_name, &topic_type)
                     .expect("topic subscribing failure");
 
-                    // let ros_handle = tokio::spawn(async move {
-                    //     info!("ROS handling loop has started!");
-                    //     while let Some(packet) = subscriber.next().await {
-                    //         // info!("received a ROS packet {:?}", packet);
-                    //         let ros_msg = packet;
-                    //         let packet = construct_gdp_forward_from_bytes(topic_gdp_name, topic_gdp_name, ros_msg );
-                    //         fib_tx.send(packet).expect("send for ros subscriber failure");
-                    //     }
-                    // });
-
                     let ros_handle = tokio::spawn (async move {
                         loop {
                             tokio::select!{
@@ -154,7 +145,7 @@ pub async fn ros_remote_service_provider(
                                     let guid = format!("{:?}", req.request_id);
                                     info!("received a ROS request {:?}", guid);
                                     let packet_guid = generate_gdp_name_from_string(&guid);
-                                    let packet = construct_gdp_request_with_guid(topic_gdp_name, topic_gdp_name, req.message.clone(), packet_guid );
+                                    let packet = construct_gdp_request_with_guid(topic_gdp_name, unique_ros_node_gdp_name, req.message.clone(), packet_guid );
                                     info!("sending to webrtc {:?}", packet);
                                     request_tx.send(packet).expect("send for ros subscriber failure");
                                     tokio::select! {
@@ -205,6 +196,7 @@ pub async fn ros_local_service_caller(
         r2r::Node::create(ctx, "sgc_local_service_caller", "namespace")
             .expect("node creation failure"),
     ));
+    let unique_ros_node_gdp_name = generate_random_gdp_name();
 
     let ros_manager_node_clone = node.clone();
     let _handle = tokio::task::spawn_blocking(move || loop {
@@ -293,7 +285,7 @@ pub async fn ros_local_service_caller(
                                     info!("the response is {:?}", resp);
                                     //send back the response to the rtc
                                     let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id));
-                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, topic_gdp_name, resp.unwrap().unwrap().to_vec(), packet_guid);
+                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, unique_ros_node_gdp_name, resp.unwrap().unwrap().to_vec(), packet_guid);
                                     fib_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{
                                     warn!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
@@ -326,6 +318,7 @@ pub async fn ros_topic_remote_publisher(
     let node = Arc::new(Mutex::new(
         r2r::Node::create(ctx, "sgc_remote_publisher", "namespace").expect("node creation failure"),
     ));
+    let unique_ros_node_gdp_name = generate_random_gdp_name();
 
     let ros_manager_node_clone = node.clone();
     let _handle = tokio::task::spawn_blocking(move || loop {
@@ -385,15 +378,6 @@ pub async fn ros_topic_remote_publisher(
                     .subscribe_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
                     .expect("topic subscribing failure");
 
-                    // let ros_handle = tokio::spawn(async move {
-                    //     info!("ROS handling loop has started!");
-                    //     while let Some(packet) = subscriber.next().await {
-                    //         // info!("received a ROS packet {:?}", packet);
-                    //         let ros_msg = packet;
-                    //         let packet = construct_gdp_forward_from_bytes(topic_gdp_name, topic_gdp_name, ros_msg );
-                    //         fib_tx.send(packet).expect("send for ros subscriber failure");
-                    //     }
-                    // });
 
                     let fib_tx = fib_tx.clone();
                     let ros_handle = tokio::spawn(async move {
@@ -401,7 +385,7 @@ pub async fn ros_topic_remote_publisher(
                         while let Some(packet) = subscriber.next().await {
                             info!("received a ROS packet {:?}", packet);
                             let ros_msg = packet;
-                            let packet = construct_gdp_forward_from_bytes(topic_gdp_name, topic_gdp_name, ros_msg );
+                            let packet = construct_gdp_forward_from_bytes(topic_gdp_name, unique_ros_node_gdp_name, ros_msg );
                             fib_tx.send(packet).expect("send for ros subscriber failure");
                         }
                     });
