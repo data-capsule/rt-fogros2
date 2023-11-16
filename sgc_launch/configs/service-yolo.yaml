@@ -1,0 +1,44 @@
+identifiers: 
+  task: test_cert 
+
+services:
+  - service_name: /yolo
+    service_type: shared_srvs/srv/Yolo
+
+state_machine: 
+  standby: 
+  client: 
+    services:
+      - /yolo: client 
+  server: 
+    services:
+      - /yolo: service 
+
+
+
+
+# EXAMPLE #1: 2 servers and 1 client
+assignment:
+  machine_client: client
+  machine_server_1: server
+  machine_server_2: server
+
+topology:
+  machine_client:
+    children: 
+      - machine_server_1
+      - machine_server_2
+
+
+# EXAMPLE #2: server -> switch -> client 
+# assignment: 
+#   machine_client: client
+#   machine_server: server
+#   machine_switch: standby
+
+# topology:
+#   machine_client:
+#     children: 
+#       - machine_switch:
+#           children: 
+#             - machine_server

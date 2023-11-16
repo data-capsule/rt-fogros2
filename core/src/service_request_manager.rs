@@ -83,6 +83,7 @@ pub async fn service_connection_fib_handler(
     let logger = Logger::new(tx);
 
     let file_name = format!("/tmp/latency-{}.log", chrono::offset::Local::now().timestamp());
+    println!("Logger file name is {}", file_name);
     let log_handler = tokio::spawn(handle_logs(rx, file_name));
 
     loop {

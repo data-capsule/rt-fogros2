@@ -30,5 +30,6 @@ pub async fn handle_logs(mut receiver: UnboundedReceiver<String>, file_path: Str
 
     while let Some(message) = receiver.recv().await {
         file.write_all(message.as_bytes()).await;
+        file.write_all(b"\n").await;
     }
 }
