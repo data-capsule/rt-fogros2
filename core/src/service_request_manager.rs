@@ -112,7 +112,6 @@ pub async fn service_connection_fib_handler(
                     GdpAction::Request => {
                         info!("received GDP request {}", pkt);
                         warn!("request: {:?}", pkt.guid);
-                        logger.log(format!(""));
                         if processed_requests.contains(&pkt.guid) {
                             warn!("the request is processed, thrown away");
                             continue;
@@ -139,7 +138,7 @@ pub async fn service_connection_fib_handler(
                         info!("received GDP response {:?}", pkt);
                         warn!("response: {:?} from {:?}", pkt.guid, pkt.source);
                         let processing_time = SystemTime::now().duration_since(request_latency_table.get(&pkt.gdpname).unwrap().clone()).unwrap();
-                        logger.log(format!("{}, {}", pkt.source, processing_time.as_micros()));
+                        logger.log(format!("{:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
                         if processed_requests.contains(&pkt.guid) {
                             warn!("the request is processed, thrown away");
                             continue;

@@ -22,13 +22,18 @@ assignment:
   machine_client: client
   machine_server_1: server
   machine_server_2: server
+  machine_server_3: server
+  machine_server_4: server
+  machine_server_5: server
 
 topology:
   machine_client:
     children: 
       - machine_server_1
       - machine_server_2
-
+      - machine_server_3
+      - machine_server_4
+      - machine_server_5
 
 # EXAMPLE #2: server -> switch -> client 
 # assignment: 
