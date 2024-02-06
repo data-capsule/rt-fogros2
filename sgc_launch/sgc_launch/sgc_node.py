@@ -36,6 +36,7 @@ class SGC_Router_Node(rclpy.node.Node):
         self.ros_domain_id = os.getenv('ROS_DOMAIN_ID') if os.getenv('ROS_DOMAIN_ID') else 0
         self.sgc_router_api_port = self.sgc_base_port + int(self.ros_domain_id)
         self.sgc_router_api_addr = f"localhost:{self.sgc_router_api_port}"
+        self.swarm = None 
 
         if self.config_file_name == "PARAMETER NOT SET":
             
@@ -135,17 +136,30 @@ class SGC_Router_Node(rclpy.node.Node):
             subprocess.call(f"kill {pid}", env=current_env,  shell=True)
         # check if the port exists
         current_env["SGC_API_PORT"] = str(self.sgc_router_api_port)
-        current_env["SGC_SIGNAL_SERVER_ADDRESS"] = self.swarm.signaling_server_address
-        current_env["SGC_RIB_SERVER_ADDRESS"] = self.swarm.routing_information_base_address
-        self.logger.info(f"using signaling server address {self.swarm.signaling_server_address}, routing information base address {self.swarm.routing_information_base_address}")
-
-        if release_mode:
-            subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
-            subprocess.Popen(f"cargo run --release --manifest-path {sgc_path}/Cargo.toml router", env=current_env,  shell=True)
+        if self.swarm:
+            current_env["SGC_SIGNAL_SERVER_ADDRESS"] = self.swarm.signaling_server_address
+            current_env["SGC_RIB_SERVER_ADDRESS"] = self.swarm.routing_information_base_address
+            self.logger.info(f"using signaling server address {self.swarm.signaling_server_address}, routing information base address {self.swarm.routing_information_base_address}")
         else:
-            subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
-            subprocess.Popen(f"cargo run --manifest-path {sgc_path}/Cargo.toml router", env=current_env,  shell=True)
-            
+            current_env["SGC_SIGNAL_SERVER_ADDRESS"] = 'ws://3.18.194.127:8000'
+            current_env["SGC_RIB_SERVER_ADDRESS"] = '3.18.194.127:8002'
+            self.logger.info(f"using default signaling server address {current_env['SGC_SIGNAL_SERVER_ADDRESS']}, routing information base address {current_env['SGC_RIB_SERVER_ADDRESS']}")
+
+        if os.path.isfile(f"{sgc_path}/target/debug/gdp-router") or os.path.isfile(f"{sgc_path}/target/release/gdp-router"):
+            logger.info("previous build of SGC router exists, skipping build")
+        else: 
+            logger.info("building SGC router...")        
+            if release_mode:
+                subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
+            else:
+                subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
+        
+        logger.info("running SGC router...")
+        if release_mode:
+            subprocess.Popen(f"{sgc_path}/target/release/gdp-router router", env=current_env,  shell=True)
+        else:
+            subprocess.Popen(f"{sgc_path}/target/debug/gdp-router router", env=current_env,  shell=True)
+
         # if release_mode:
         #     # subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
         #     subprocess.Popen(f"{sgc_path}/target/release/gdp-router router", env=current_env,  shell=True)
