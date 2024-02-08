@@ -145,15 +145,15 @@ class SGC_Router_Node(rclpy.node.Node):
             current_env["SGC_RIB_SERVER_ADDRESS"] = '3.18.194.127:8002'
             self.logger.info(f"using default signaling server address {current_env['SGC_SIGNAL_SERVER_ADDRESS']}, routing information base address {current_env['SGC_RIB_SERVER_ADDRESS']}")
 
-        if os.path.isfile(f"{sgc_path}/target/debug/gdp-router") or os.path.isfile(f"{sgc_path}/target/release/gdp-router"):
-            logger.info("previous build of SGC router exists, skipping build")
-        else: 
-            logger.info("building SGC router...")        
-            if release_mode:
-                subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
-            else:
-                subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
-        
+        # if os.path.isfile(f"{sgc_path}/target/debug/gdp-router") or os.path.isfile(f"{sgc_path}/target/release/gdp-router"):
+        #     logger.info("previous build of SGC router exists, skipping build")
+        # else: 
+        logger.info("building SGC router...")        
+        if release_mode:
+            subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml router", env=current_env,  shell=True)
+        else:
+            subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml router", env=current_env,  shell=True)
+    
         logger.info("running SGC router...")
         if release_mode:
             subprocess.Popen(f"{sgc_path}/target/release/gdp-router router", env=current_env,  shell=True)
