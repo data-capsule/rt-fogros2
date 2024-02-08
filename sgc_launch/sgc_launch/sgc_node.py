@@ -150,9 +150,9 @@ class SGC_Router_Node(rclpy.node.Node):
         # else: 
         logger.info("building SGC router...")        
         if release_mode:
-            subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml router", env=current_env,  shell=True)
+            subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
         else:
-            subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml router", env=current_env,  shell=True)
+            subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
     
         logger.info("running SGC router...")
         if release_mode:
