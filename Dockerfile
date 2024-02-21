@@ -3,50 +3,15 @@ FROM osrf/ros:humble-desktop AS chef
 RUN apt update && apt install -y build-essential curl pkg-config libssl-dev protobuf-compiler clang
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-RUN cargo install cargo-chef --locked
 
-RUN apt-get update && apt-get install -y build-essential curl pkg-config libssl-dev protobuf-compiler clang libssl-dev wget ros-humble-rmw-cyclonedds-cpp
-# https://stackoverflow.com/questions/72378647/spl-token-error-while-loading-shared-libraries-libssl-so-1-1-cannot-open-shar
-RUN wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.19_amd64.deb
-RUN dpkg -i libssl1.1_1.1.1f-1ubuntu2.19_amd64.deb
-
-WORKDIR app
-
-FROM chef AS planner
-COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
+WORKDIR /fog_ws 
+# changed to .
+COPY ./rt-fogros2 /fog_ws/src/rt-fogros2
+RUN . /opt/ros/humble/setup.sh && colcon build 
+RUN . ./install/setup.sh &&  cargo build --release --manifest-path ./src/rt-fogros2/Cargo.toml
 
 
-FROM chef AS signal_builder 
-
-WORKDIR /app
-COPY ./signaling ./
-RUN cargo build --release
-
-
-FROM chef AS sgc_builder 
-
-WORKDIR /app
-COPY --from=planner /app/recipe.json recipe.json
-RUN . /opt/ros/humble/setup.sh && cargo chef cook --release --recipe-path recipe.json
-# to run with release mode, uncomment the following line
-# RUN . /opt/ros/humble/setup.sh cargo chef cook --release --recipe-path recipe.json
-
-COPY . .
-# generate crypto keys
-WORKDIR /app/scripts
-RUN bash ./generate_crypto.sh
-# build app
-WORKDIR /app
-RUN . /opt/ros/humble/setup.sh && cargo build --release
-
-# build the final image
-FROM chef
-WORKDIR /
-COPY --from=signal_builder  /app/target/release/sgc_signaling_server /signaling_server
-COPY --from=sgc_builder /app/bench /fog_ws
-COPY --from=sgc_builder /app/src /src 
-COPY --from=sgc_builder /app/scripts /scripts
-COPY --from=sgc_builder /app/target/release/gdp-router /
-
-CMD [ "source /opt/ros/rolling/setup.bash; cargo run", "router" ]
+RUN apt-get update && apt-get install -y python3-pip
+RUN pip install requests
+RUN ls /fog_ws/install/../src/rt-fogros2/target/release/gdp-router
+CMD . ./install/setup.sh && ros2 run sgc_launch sgc_router --ros-args -p config_file_name:=service-client.yaml -p whoami:=service_server -p release_mode:=True

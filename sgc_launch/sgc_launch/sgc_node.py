@@ -149,10 +149,10 @@ class SGC_Router_Node(rclpy.node.Node):
         #     logger.info("previous build of SGC router exists, skipping build")
         # else: 
         logger.info("building SGC router...")        
-        if release_mode:
-            subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
-        else:
-            subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
+        # if release_mode:
+        #     subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
+        # else:
+        #     subprocess.call(f"cargo build --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
     
         logger.info("running SGC router...")
         if release_mode:
@@ -168,7 +168,7 @@ class SGC_Router_Node(rclpy.node.Node):
         #     subprocess.Popen(f"{sgc_path}/target/release/gdp-router router", env=current_env,  shell=True)
         
         if not self.automatic_mode:
-            sleep(2)
+            sleep(10)
             self.swarm.apply_assignment(self.swarm.get_assignment_from_yaml(config_path))
 
 
