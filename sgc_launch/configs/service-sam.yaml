@@ -20,20 +20,12 @@ state_machine:
 # EXAMPLE #1: 2 servers and 1 client
 assignment:
   machine_client: client
-  machine_server_1: server
-  machine_server_2: server
-  machine_server_3: server
-  machine_server_4: server
-  machine_server_5: server
+  machine_server: server
 
 topology:
   machine_client:
     children: 
-      - machine_server_1
-      - machine_server_2
-      - machine_server_3
-      - machine_server_4
-      - machine_server_5
+      - machine_server
 
 
 # EXAMPLE #2: server -> switch -> client 
