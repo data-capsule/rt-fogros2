@@ -146,7 +146,7 @@ pub async fn ros_remote_service_provider(
                                     info!("received a ROS request {:?}", guid);
                                     let packet_guid = generate_gdp_name_from_string(&guid);
                                     let packet = construct_gdp_request_with_guid(topic_gdp_name, unique_ros_node_gdp_name, req.message.clone(), packet_guid );
-                                    info!("sending to webrtc {:?}", packet);
+                                    // info!("sending to webrtc {:?}", packet);
                                     request_tx.send(packet).expect("send for ros subscriber failure");
                                     tokio::select! {
                                         Some(packet) = ros_rx.recv() => {
@@ -281,11 +281,11 @@ pub async fn ros_local_service_caller(
                                     let payload = pkt_to_forward.get_byte_payload().unwrap();
                                     let ros_msg = payload;
                                     info!("the request payload to publish is {:?}", ros_msg);
-                                    let resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await;
+                                    let resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await.expect("service call failure");
                                     info!("the response is {:?}", resp);
                                     //send back the response to the rtc
                                     let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id));
-                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, unique_ros_node_gdp_name, resp.unwrap().unwrap().to_vec(), packet_guid);
+                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, unique_ros_node_gdp_name, resp.unwrap().to_vec(), packet_guid);
                                     fib_tx.send(packet).expect("send for ros subscriber failure");
                                 } else{
                                     warn!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
