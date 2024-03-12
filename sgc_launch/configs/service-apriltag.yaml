@@ -2,21 +2,18 @@ identifiers:
   task: test_cert 
 
 services:
-  - service_name: /sam
-    service_type: shared_srvs/srv/Sam
+  - service_name: /process_image
+    service_type: apriltag_msgs/srv/ImageProcess
 
 state_machine: 
   standby: 
   client: 
     services:
-      - /sam: client 
+      - /process_image: client 
   server: 
     services:
-      - /sam: service 
-
-
-
-
+      - /process_image: service 
+      
 # EXAMPLE #1: 2 servers and 1 client
 assignment:
   machine_client: client
@@ -26,7 +23,6 @@ topology:
   machine_client:
     children: 
       - machine_server
-
 
 # EXAMPLE #2: server -> switch -> client 
 # assignment: 

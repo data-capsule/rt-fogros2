@@ -124,6 +124,7 @@ pub async fn service_connection_fib_handler(
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUEST {
                                         request_latency_table.insert(pkt.gdpname, SystemTime::now());
                                         let _ = dst.tx.send(pkt.clone());
+                                        logger.log(format!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
                                     } else {
                                         warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
                                     }
@@ -138,7 +139,7 @@ pub async fn service_connection_fib_handler(
                         info!("received GDP response {:?}", pkt);
                         warn!("response: {:?} from {:?}", pkt.guid, pkt.source);
                         let processing_time = SystemTime::now().duration_since(request_latency_table.get(&pkt.gdpname).unwrap().clone()).unwrap();
-                        logger.log(format!("{:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
+                        logger.log(format!("RESPONSE, {:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
                         if processed_requests.contains(&pkt.guid) {
                             warn!("the request is processed, thrown away");
                             continue;

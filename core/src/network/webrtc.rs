@@ -310,6 +310,11 @@ pub async fn webrtc_reader_and_writer(
                     stream.write_all(&name_record_buffer[..name_record_buffer.len()]).await.unwrap();
                 }
             }
+
+            else => {
+                info!("The connection is closed");
+                break;
+            },
         }
     }
     // loop {
