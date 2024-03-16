@@ -512,7 +512,7 @@ pub struct RoutingManagerRequest {
     communication_url: Option<String>,
 }
 
-// fib -> webrtc
+// fib -> udp
 async fn sender_network_routing_thread_manager(
     mut request_rx: UnboundedReceiver<RoutingManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
@@ -638,41 +638,7 @@ async fn sender_network_routing_thread_manager(
                                 warn!("receiver {} already in the list, ignore", receiver);
                                 continue;
                             }
-                            let sender_url = format!(
-                                "{},{},{}",
-                                gdp_name_to_string(topic_gdp_name),
-                                gdp_name_to_string(sender_listening_gdp_name),
-                                receiver
-                            );
-                            info!("sender listening for signaling url {}", sender_url);
 
-                            add_entity_to_database_as_transaction(
-                                &redis_url,
-                                &sender_topic,
-                                &sender_url,
-                            )
-                            .expect("Cannot add sender to database");
-                            info!(
-                                "sender {} added to database of channel {}",
-                                &sender_url, sender_topic
-                            );
-
-                            let webrtc_stream = register_stream(&sender_url, None).await;
-                            info!("sender registered webrtc stream");
-
-                            let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                            // let sender_url = "sender".to_string();
-                            let _rtc_handle =
-                                tokio::spawn(reader_and_writer(fib_tx.clone(), local_to_rtc_rx));
-                            let channel_update_msg = FibStateChange {
-                            action: FibChangeAction::ADD,
-                            topic_gdp_name: topic_gdp_name,
-                            connection_type: connection_type,
-                            forward_destination: Some(local_to_rtc_tx),
-                            description: Some(format!("webrtc stream for topic_name {}, topic_type {}, receiver {}, connection_type {:?}", topic_name, topic_type, receiver, connection_type)),
-                        };
-                            let _ = channel_tx.send(channel_update_msg);
-                            info!("remote sender sent channel update message");
                         }
                         None => {
                             info!("message is none");
@@ -690,7 +656,7 @@ async fn sender_network_routing_thread_manager(
     // futures::future::join_all(join_handles).await;
 }
 
-// webrtc -> fib
+// udp -> fib
 async fn receiver_network_routing_thread_manager(
     mut request_rx: UnboundedReceiver<RoutingManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
 ) {
@@ -737,122 +703,8 @@ async fn receiver_network_routing_thread_manager(
             .expect("Cannot add sender to database");
             info!("receiver added to database");
 
-            let senders = get_entity_from_database(&redis_url, &sender_topic)
-                .expect("Cannot get receiver from database");
-            info!("sender list {:?}", senders);
-
-            let tasks = senders.clone().into_iter().map(|sender| {
-                let _topic_name_clone = topic_name.clone();
-                let _topic_type_clone = topic_type.clone();
-                let _certificate_clone = certificate.clone();
-                let receiver_listening_gdp_name_clone = receiver_listening_gdp_name.clone();
-                if !sender.ends_with(&gdp_name_to_string(receiver_listening_gdp_name_clone)) {
-                    info!(
-                        "find sender mailbox {} doesn not end with receiver {}",
-                        sender,
-                        gdp_name_to_string(receiver_listening_gdp_name_clone)
-                    );
-                    let handle = tokio::spawn(async move {});
-                    return handle;
-                } else {
-                    info!(
-                        "find sender mailbox {} ends with receiver {}",
-                        sender,
-                        gdp_name_to_string(receiver_listening_gdp_name_clone)
-                    );
-                }
-                let sender = sender
-                    .split(',')
-                    .skip(4)
-                    .take(4)
-                    .collect::<Vec<&str>>()
-                    .join(",");
-
-                tokio::spawn(async move {
-                    info!("sender {}", sender);
-                    // receiver's address
-                    let my_signaling_url = format!(
-                        "{},{},{}",
-                        gdp_name_to_string(topic_gdp_name),
-                        gdp_name_to_string(receiver_listening_gdp_name_clone),
-                        sender
-                    );
-                    // sender's address
-                    let peer_dialing_url = format!(
-                        "{},{},{}",
-                        gdp_name_to_string(topic_gdp_name),
-                        sender,
-                        gdp_name_to_string(receiver_listening_gdp_name)
-                    );
-                    // let subsc = format!("{}/{}", gdp_name_to_string(sender_listening_gdp_name), receiver);
-                    info!(
-                        "receiver uses signaling url {} that peers to {}",
-                        my_signaling_url, peer_dialing_url
-                    );
-                    // workaround to prevent receiver from dialing before sender is listening
-                    tokio::time::sleep(Duration::from_millis(1000)).await;
-                    info!("receiver starts to register webrtc stream");
-                    let _webrtc_stream =
-                        register_stream(&my_signaling_url, Some(peer_dialing_url)).await;
-                    info!("receiver registered webrtc stream");
-                })
-            });
-
-            // Wait for all tasks to complete
-            futures::future::join_all(tasks).await;
-            info!("all the mailboxes are checked!");
-
-            loop {
-                tokio::select! {
-                    Some(message) = msgs.next() => {
-                        match message {
-                            Ok(message) => {
-                                let received_operation = String::from_resp(message).unwrap();
-                                info!("KVS {}", received_operation);
-                                if received_operation != "lpush" {
-                                    info!("the operation is not lpush, ignore");
-                                    continue;
-                                }
-
-                                let updated_senders = get_entity_from_database(&redis_url, &sender_topic).expect("Cannot get sender from database");
-                                info!("get a list of senders from KVS {:?}", updated_senders);
-                                let sender = updated_senders.first().unwrap(); //first or last?
-
-                                if senders.contains(sender) {
-                                    warn!("sender {} already exists", sender);
-                                    continue;
-                                }
-
-                                if !sender.ends_with(&gdp_name_to_string(receiver_listening_gdp_name)) {
-                                    warn!("find sender mailbox {} doesn not end with receiver {}", sender, gdp_name_to_string(receiver_listening_gdp_name));
-                                    continue;
-                                }
-                                let sender = sender.split(',').skip(4).take(4).collect::<Vec<&str>>().join(",");
-
-                                // receiver's address
-                                let my_signaling_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),gdp_name_to_string(receiver_listening_gdp_name), sender);
-                                // sender's address
-                                let peer_dialing_url = format!("{},{},{}", gdp_name_to_string(topic_gdp_name),sender, gdp_name_to_string(receiver_listening_gdp_name));
-                                // let subsc = format!("{}/{}", gdp_name_to_string(sender_listening_gdp_name), receiver);
-                                info!("receiver uses signaling url {} that peers to {}", my_signaling_url, peer_dialing_url);
-                                tokio::time::sleep(Duration::from_millis(1000)).await;
-                                info!("receiver starts to register webrtc stream");
-                                // workaround to prevent receiver from dialing before sender is listening
-                                let webrtc_stream = register_stream(&my_signaling_url, Some(peer_dialing_url)).await;
-
-                                info!("receiver registered webrtc stream");
-                                let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                                let fib_tx_clone = fib_tx.clone();
-                                let _rtc_handle = tokio::spawn(reader_and_writer(fib_tx_clone, local_to_rtc_rx));
-                                tokio::time::sleep(Duration::from_millis(1000)).await;
-                            },
-                            Err(e) => {
-                                eprintln!("ERROR: {}", e);
-                            }
-                        }
-                    }
-                }
-            }
+            let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+            let _rtc_handle = tokio::spawn(reader_and_writer(fib_tx, local_to_rtc_rx));    
         });
     }
 }
