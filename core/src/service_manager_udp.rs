@@ -1,47 +1,57 @@
 use crate::api_server::ROSTopicRequest;
 
 use crate::db::{
-    add_entity_to_database_as_transaction, allow_keyspace_notification, get_entity_from_database,
-    get_redis_address_and_port, get_redis_url,
+    add_entity_to_database_as_transaction,
+    allow_keyspace_notification,
+    get_entity_from_database,
+    get_redis_address_and_port,
+    get_redis_url,
 };
 
-use crate::network::udp::{reader_and_writer, register_stream};
+use crate::network::udp::{ reader_and_writer, register_stream };
 
 use crate::pipeline::{
-    construct_gdp_forward_from_bytes, construct_gdp_request_with_guid,
+    construct_gdp_forward_from_bytes,
+    construct_gdp_request_with_guid,
     construct_gdp_response_with_guid,
 };
-use crate::service_request_manager::{service_connection_fib_handler, FibConnectionType};
+use crate::service_request_manager::{ service_connection_fib_handler, FibConnectionType };
 use crate::structs::{
-    gdp_name_to_string, generate_gdp_name_from_string, generate_random_gdp_name,
-    get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet,
+    gdp_name_to_string,
+    generate_gdp_name_from_string,
+    generate_random_gdp_name,
+    get_gdp_name_from_topic,
+    GDPName,
+    GDPPacket,
+    GdpAction,
+    Packet,
 };
 
-use crate::service_request_manager::{FibChangeAction, FibStateChange};
+use crate::service_request_manager::{ FibChangeAction, FibStateChange };
 
 use redis_async::client;
 use redis_async::resp::FromResp;
-use serde::{Deserialize, Serialize};
+use serde::{ Deserialize, Serialize };
 
 use std::env;
 use std::str;
-use std::sync::{Arc, Mutex};
+use std::sync::{ Arc, Mutex };
 use tokio::select;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{ UnboundedReceiver, UnboundedSender };
 
 use futures::StreamExt;
 
-use tokio::sync::mpsc::{self};
+use tokio::sync::mpsc::{ self };
 
 use tokio::time::Duration;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum TopicManagerAction {
     ADD,
-    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
+    PAUSE, // pausing the forwarding of the topic, keeping connections alive
     PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME,   // resume a paused topic
-    DELETE,   // deleting a local topic interface and all its connections
+    RESUME, // resume a paused topic
+    DELETE, // deleting a local topic interface and all its connections
     RESPONSE,
 }
 
@@ -54,25 +64,32 @@ pub struct TopicManagerRequest {
 
 // ROS service(provider) -> webrtc (publish remotely); webrtc -> local service client
 pub async fn ros_remote_service_provider(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>
 ) {
     let mut join_handles = vec![];
 
     let ctx = r2r::Context::create().expect("context creation failure");
-    let node = Arc::new(Mutex::new(
-        r2r::Node::create(ctx, "sgc_remote_service", "namespace").expect("node creation failure"),
-    ));
+    let node = Arc::new(
+        Mutex::new(
+            r2r::Node
+                ::create(ctx, "sgc_remote_service", "namespace")
+                .expect("node creation failure")
+        )
+    );
     let unique_ros_node_gdp_name = generate_random_gdp_name();
 
     let ros_manager_node_clone = node.clone();
-    let _handle = tokio::task::spawn_blocking(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        ros_manager_node_clone
-            .clone()
-            .lock()
-            .unwrap()
-            .spin_once(std::time::Duration::from_millis(10));
+    let _handle = tokio::task::spawn_blocking(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            ros_manager_node_clone
+                .clone()
+                .lock()
+                .unwrap()
+                .spin_once(std::time::Duration::from_millis(10));
+        }
     });
 
     let mut existing_topics = vec![];
@@ -179,27 +196,33 @@ pub async fn ros_remote_service_provider(
 
 // webrtc -> sgc_local_service_caller (call the service locally) -> webrtc
 pub async fn ros_local_service_caller(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
     let mut join_handles = vec![];
 
     let ctx = r2r::Context::create().expect("context creation failure");
-    let node = Arc::new(Mutex::new(
-        r2r::Node::create(ctx, "sgc_local_service_caller", "namespace")
-            .expect("node creation failure"),
-    ));
+    let node = Arc::new(
+        Mutex::new(
+            r2r::Node
+                ::create(ctx, "sgc_local_service_caller", "namespace")
+                .expect("node creation failure")
+        )
+    );
     let unique_ros_node_gdp_name = generate_random_gdp_name();
 
     let ros_manager_node_clone = node.clone();
-    let _handle = tokio::task::spawn_blocking(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        ros_manager_node_clone
-            .clone()
-            .lock()
-            .unwrap()
-            .spin_once(std::time::Duration::from_millis(10));
+    let _handle = tokio::task::spawn_blocking(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            ros_manager_node_clone
+                .clone()
+                .lock()
+                .unwrap()
+                .spin_once(std::time::Duration::from_millis(10));
+        }
     });
 
     let mut existing_topics = vec![];
@@ -301,25 +324,32 @@ pub async fn ros_local_service_caller(
 
 // local ROS topic(provider) -> webrtc (publish remotely)
 pub async fn ros_topic_remote_publisher(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>
 ) {
     let mut join_handles = vec![];
 
     let ctx = r2r::Context::create().expect("context creation failure");
-    let node = Arc::new(Mutex::new(
-        r2r::Node::create(ctx, "sgc_remote_publisher", "namespace").expect("node creation failure"),
-    ));
+    let node = Arc::new(
+        Mutex::new(
+            r2r::Node
+                ::create(ctx, "sgc_remote_publisher", "namespace")
+                .expect("node creation failure")
+        )
+    );
     let unique_ros_node_gdp_name = generate_random_gdp_name();
 
     let ros_manager_node_clone = node.clone();
-    let _handle = tokio::task::spawn_blocking(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        ros_manager_node_clone
-            .clone()
-            .lock()
-            .unwrap()
-            .spin_once(std::time::Duration::from_millis(10));
+    let _handle = tokio::task::spawn_blocking(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            ros_manager_node_clone
+                .clone()
+                .lock()
+                .unwrap()
+                .spin_once(std::time::Duration::from_millis(10));
+        }
     });
 
     let mut existing_topics = vec![];
@@ -390,26 +420,32 @@ pub async fn ros_topic_remote_publisher(
 
 // webrtc -> ros topic locally
 pub async fn ros_topic_remote_subscriber(
-    mut status_recv: UnboundedReceiver<TopicManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>,
+    mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>
 ) {
     info!("ros_topic_remote_subscriber_handler has started");
     let mut join_handles = vec![];
 
     let ctx = r2r::Context::create().expect("context creation failure");
-    let node = Arc::new(Mutex::new(
-        r2r::Node::create(ctx, "sgc_remote_subscriber", "namespace")
-            .expect("node creation failure"),
-    ));
+    let node = Arc::new(
+        Mutex::new(
+            r2r::Node
+                ::create(ctx, "sgc_remote_subscriber", "namespace")
+                .expect("node creation failure")
+        )
+    );
 
     let ros_manager_node_clone = node.clone();
-    let _handle = tokio::task::spawn_blocking(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        ros_manager_node_clone
-            .clone()
-            .lock()
-            .unwrap()
-            .spin_once(std::time::Duration::from_millis(10));
+    let _handle = tokio::task::spawn_blocking(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            ros_manager_node_clone
+                .clone()
+                .lock()
+                .unwrap()
+                .spin_once(std::time::Duration::from_millis(10));
+        }
     });
 
     let mut existing_topics = vec![];
@@ -514,8 +550,9 @@ pub struct RoutingManagerRequest {
 
 // fib -> udp
 async fn sender_network_routing_thread_manager(
-    mut request_rx: UnboundedReceiver<RoutingManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>,
+    mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>
 ) {
     // let mut streams = Arc::new(Mutex::new(vec![]);
 
@@ -530,16 +567,16 @@ async fn sender_network_routing_thread_manager(
             let fib_tx = fib_tx.clone();
             let channel_tx = channel_tx.clone();
             let communication_channel_url = request.communication_url.clone();
-            let channel_gdp_name = GDPName(get_gdp_name_from_topic(
-                communication_channel_url.unwrap().as_str(),
-                &topic_type,
-                &certificate,
-            ));
-            let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                &topic_name,
-                &topic_type,
-                &certificate,
-            ));
+            let channel_gdp_name = GDPName(
+                get_gdp_name_from_topic(
+                    communication_channel_url.unwrap().as_str(),
+                    &topic_type,
+                    &certificate
+                )
+            );
+            let topic_gdp_name = GDPName(
+                get_gdp_name_from_topic(&topic_name, &topic_type, &certificate)
+            );
             let connection_type = match request.connection_type.clone().unwrap().as_str() {
                 "request" => FibConnectionType::REQUEST,
                 "response" => FibConnectionType::RESPONSE,
@@ -548,10 +585,7 @@ async fn sender_network_routing_thread_manager(
                 _ => FibConnectionType::BIDIRECTIONAL,
             };
             info!("handling routing request {:?}", request);
-            warn!(
-                "sender_network_routing_thread_manager {:?}",
-                connection_type
-            );
+            warn!("sender_network_routing_thread_manager {:?}", connection_type);
 
             allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
             let sender_listening_gdp_name = generate_random_gdp_name();
@@ -561,61 +595,76 @@ async fn sender_network_routing_thread_manager(
             let receiver_topic = format!("{}-receiver", gdp_name_to_string(channel_gdp_name));
 
             let redis_addr_and_port = get_redis_address_and_port();
-            let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-                .await
+            let pubsub_con = client
+                ::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1).await
                 .expect("Cannot connect to Redis");
             let topic = format!("__keyspace@0__:{}", receiver_topic);
-            let mut msgs = pubsub_con
-                .psubscribe(&topic)
-                .await
-                .expect("Cannot subscribe to topic");
+            let mut msgs = pubsub_con.psubscribe(&topic).await.expect("Cannot subscribe to topic");
 
-            let receivers = get_entity_from_database(&redis_url, &receiver_topic)
-                .expect("Cannot get receiver from database");
+            let receivers = get_entity_from_database(&redis_url, &receiver_topic).expect(
+                "Cannot get receiver from database"
+            );
             info!("receiver list {:?} for key {}", receivers, receiver_topic);
 
-            let tasks = receivers.clone().into_iter().map(|receiver| {
-                let topic_name_clone = topic_name.clone();
-                let topic_type_clone = topic_type.clone();
-                let _certificate_clone = certificate.clone();
-                let sender_topic = sender_topic.clone();
-                let channel_tx = channel_tx.clone();
-                let fib_tx_clone = fib_tx.clone();
-                let redis_url = redis_url.clone();
-                let sender_listening_gdp_name_clone = sender_listening_gdp_name.clone();
+            let tasks = receivers
+                .clone()
+                .into_iter()
+                .map(|receiver| {
+                    let topic_name_clone = topic_name.clone();
+                    let topic_type_clone = topic_type.clone();
+                    let _certificate_clone = certificate.clone();
+                    let sender_topic = sender_topic.clone();
+                    let channel_tx = channel_tx.clone();
+                    let fib_tx_clone = fib_tx.clone();
+                    let redis_url = redis_url.clone();
+                    let sender_listening_gdp_name_clone = sender_listening_gdp_name.clone();
 
-                tokio::spawn(async move {
-                    info!("receiver {}", receiver);
-                    let sender_url = format!(
-                        "{},{},{}",
-                        gdp_name_to_string(topic_gdp_name),
-                        gdp_name_to_string(sender_listening_gdp_name_clone),
-                        receiver
-                    );
-                    info!("sender listening for signaling url {}", sender_url);
+                    tokio::spawn(async move {
+                        info!("receiver {}", receiver);
+                        let sender_url = format!(
+                            "{},{},{}",
+                            gdp_name_to_string(topic_gdp_name),
+                            gdp_name_to_string(sender_listening_gdp_name_clone),
+                            receiver
+                        );
+                        info!("sender listening for signaling url {}", sender_url);
 
-                    add_entity_to_database_as_transaction(&redis_url, &sender_topic, &sender_url)
-                        .expect("Cannot add sender to database");
-                    info!(
-                        "sender {} added to database of channel {}",
-                        &sender_url, sender_topic
-                    );
+                        add_entity_to_database_as_transaction(
+                            &redis_url,
+                            &sender_topic,
+                            &sender_url
+                        ).expect("Cannot add sender to database");
+                        info!(
+                            "sender {} added to database of channel {}",
+                            &sender_url,
+                            sender_topic
+                        );
 
-                    info!("sender registered webrtc stream");
+                        info!("sender registered webrtc stream");
 
-                    let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                    let _rtc_handle = tokio::spawn(reader_and_writer(fib_tx_clone, local_to_rtc_rx));
-                    let channel_update_msg = FibStateChange {
-                        action: FibChangeAction::ADD,
-                        topic_gdp_name: topic_gdp_name,
-                        connection_type: connection_type,
-                        forward_destination: Some(local_to_rtc_tx),
-                        description: Some(format!("webrtc stream for topic_name {}, topic_type {}, receiver {}, connection_type {:?}", topic_name_clone, topic_type_clone, receiver, connection_type)),
-                    };
-                    let _ = channel_tx.send(channel_update_msg);
-                    info!("remote sender sent channel update message");
-            })
-        });
+                        let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                        let _rtc_handle = tokio::spawn(
+                            reader_and_writer(fib_tx_clone, local_to_rtc_rx)
+                        );
+                        let channel_update_msg = FibStateChange {
+                            action: FibChangeAction::ADD,
+                            topic_gdp_name: topic_gdp_name,
+                            connection_type: connection_type,
+                            forward_destination: Some(local_to_rtc_tx),
+                            description: Some(
+                                format!(
+                                    "webrtc stream for topic_name {}, topic_type {}, receiver {}, connection_type {:?}",
+                                    topic_name_clone,
+                                    topic_type_clone,
+                                    receiver,
+                                    connection_type
+                                )
+                            ),
+                        };
+                        let _ = channel_tx.send(channel_update_msg);
+                        info!("remote sender sent channel update message");
+                    })
+                });
             let mut tasks = tasks.collect::<Vec<_>>();
 
             let message_handling_task_handle = tokio::spawn(async move {
@@ -629,16 +678,16 @@ async fn sender_network_routing_thread_manager(
                                 info!("the operation is not lpush, ignore");
                                 continue;
                             }
-                            let updated_receivers =
-                                get_entity_from_database(&redis_url, &receiver_topic)
-                                    .expect("Cannot get receiver from database");
+                            let updated_receivers = get_entity_from_database(
+                                &redis_url,
+                                &receiver_topic
+                            ).expect("Cannot get receiver from database");
                             info!("get a list of receivers from KVS {:?}", updated_receivers);
                             let receiver = updated_receivers.first().unwrap(); // first or last?
                             if receivers.clone().contains(receiver) {
                                 warn!("receiver {} already in the list, ignore", receiver);
                                 continue;
                             }
-
                         }
                         None => {
                             info!("message is none");
@@ -658,7 +707,8 @@ async fn sender_network_routing_thread_manager(
 
 // udp -> fib
 async fn receiver_network_routing_thread_manager(
-    mut request_rx: UnboundedReceiver<RoutingManagerRequest>, fib_tx: UnboundedSender<GDPPacket>,
+    mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
+    fib_tx: UnboundedSender<GDPPacket>
 ) {
     while let Some(request) = request_rx.recv().await {
         let fib_tx = fib_tx.clone();
@@ -669,16 +719,16 @@ async fn receiver_network_routing_thread_manager(
             let topic_type = request.topic_type.clone();
             let certificate = request.certificate.clone();
             let communication_channel_url = request.communication_url.clone();
-            let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                &topic_name,
-                &topic_type,
-                &certificate,
-            ));
-            let channel_gdp_name = GDPName(get_gdp_name_from_topic(
-                communication_channel_url.unwrap().as_str(),
-                &topic_type,
-                &certificate,
-            ));
+            let topic_gdp_name = GDPName(
+                get_gdp_name_from_topic(&topic_name, &topic_type, &certificate)
+            );
+            let channel_gdp_name = GDPName(
+                get_gdp_name_from_topic(
+                    communication_channel_url.unwrap().as_str(),
+                    &topic_type,
+                    &certificate
+                )
+            );
             let redis_url = get_redis_url();
             allow_keyspace_notification(&redis_url).expect("unable to allow keyspace notification");
             // currently open another synchronous connection for put and get
@@ -686,25 +736,21 @@ async fn receiver_network_routing_thread_manager(
             let receiver_topic = format!("{}-receiver", gdp_name_to_string(channel_gdp_name));
 
             let redis_addr_and_port = get_redis_address_and_port();
-            let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-                .await
+            let pubsub_con = client
+                ::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1).await
                 .expect("Cannot connect to Redis");
             let topic = format!("__keyspace@0__:{}", sender_topic);
-            let mut msgs = pubsub_con
-                .psubscribe(&topic)
-                .await
-                .expect("Cannot subscribe to topic");
+            let mut msgs = pubsub_con.psubscribe(&topic).await.expect("Cannot subscribe to topic");
 
             add_entity_to_database_as_transaction(
                 &redis_url,
                 &receiver_topic,
-                gdp_name_to_string(receiver_listening_gdp_name).as_str(),
-            )
-            .expect("Cannot add sender to database");
+                gdp_name_to_string(receiver_listening_gdp_name).as_str()
+            ).expect("Cannot add sender to database");
             info!("receiver added to database");
 
             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-            let _rtc_handle = tokio::spawn(reader_and_writer(fib_tx, local_to_rtc_rx));    
+            let _rtc_handle = tokio::spawn(reader_and_writer(fib_tx, local_to_rtc_rx));
         });
     }
 }
@@ -716,10 +762,7 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     let crypto_name = "test_cert";
     let crypto_path = match env::var_os("SGC_CRYPTO_PATH") {
         Some(config_file) => config_file.into_string().unwrap(),
-        None => format!(
-            "./sgc_launch/configs/crypto/{}/{}-private.pem",
-            crypto_name, crypto_name
-        ),
+        None => format!("./sgc_launch/configs/crypto/{}/{}-private.pem", crypto_name, crypto_name),
     };
 
     let certificate = std::fs::read(crypto_path).expect("crypto file not found!");
@@ -772,8 +815,11 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     let fib_tx_clone = fib_tx.clone();
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
     let sender_routing_manager_handle = tokio::spawn(async move {
-        sender_network_routing_thread_manager(sender_routing_rx, fib_tx_clone, channel_tx.clone())
-            .await
+        sender_network_routing_thread_manager(
+            sender_routing_rx,
+            fib_tx_clone,
+            channel_tx.clone()
+        ).await
     });
     waiting_rib_handles.push(sender_routing_manager_handle);
 
