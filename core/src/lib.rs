@@ -14,7 +14,7 @@ pub mod db;
 pub mod pipeline;
 // util
 pub mod commands;
-pub mod service_manager;
+pub mod service_manager_udp;
 pub mod service_request_manager;
 pub mod topic_manager;
 pub mod util;

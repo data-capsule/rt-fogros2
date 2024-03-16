@@ -5,8 +5,8 @@ use crate::db::{
     add_entity_to_database_as_transaction, allow_keyspace_notification, get_entity_from_database,
     get_redis_address_and_port, get_redis_url,
 };
-#[cfg(feature = "ros")]
-use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
+
+use crate::network::udp::{register_stream, reader_and_writer};
 
 use crate::pipeline::{
     construct_gdp_forward_from_bytes, construct_gdp_request_with_guid,
@@ -259,7 +259,7 @@ pub async fn ros_local_service_caller(
                 let _ = channel_tx.send(channel_update_msg);
 
 
-                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, fib_tx.clone(), rtc_rx));
+                // let rtc_handle = tokio::spawn(reader_and_writer(stream, fib_tx.clone(), rtc_rx));
                 // join_handles.push(rtc_handle);
 
                 if existing_topics.contains(&topic_gdp_name) {
@@ -471,7 +471,7 @@ pub async fn ros_topic_remote_subscriber(
                 let _ = channel_tx.send(channel_update_msg);
 
 
-                // let rtc_handle = tokio::spawn(webrtc_reader_and_writer(stream, fib_tx.clone(), rtc_rx));
+                // let rtc_handle = tokio::spawn(reader_and_writer(stream, fib_tx.clone(), rtc_rx));
                 // join_handles.push(rtc_handle);
 
                 if existing_topics.contains(&topic_gdp_name) {
@@ -611,12 +611,10 @@ async fn sender_network_routing_thread_manager(
                         &sender_url, sender_topic
                     );
 
-                    let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
-
                     info!("sender registered webrtc stream");
 
                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                    let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                    let _rtc_handle = tokio::spawn(reader_and_writer(fib_tx_clone, local_to_rtc_rx));
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
                         topic_gdp_name: topic_gdp_name,
@@ -669,13 +667,12 @@ async fn sender_network_routing_thread_manager(
                                 &sender_url, sender_topic
                             );
 
-                            let webrtc_stream = register_webrtc_stream(&sender_url, None).await;
+                            let webrtc_stream = register_stream(&sender_url, None).await;
                             info!("sender registered webrtc stream");
 
                             let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                             // let sender_url = "sender".to_string();
-                            let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(
-                                webrtc_stream,
+                            let _rtc_handle = tokio::spawn(reader_and_writer(
                                 fib_tx.clone(),
                                 local_to_rtc_rx,
                             ));
@@ -809,7 +806,7 @@ async fn receiver_network_routing_thread_manager(
                     tokio::time::sleep(Duration::from_millis(1000)).await;
                     info!("receiver starts to register webrtc stream");
                     let _webrtc_stream =
-                        register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
+                        register_stream(&my_signaling_url, Some(peer_dialing_url)).await;
                     info!("receiver registered webrtc stream");
                 })
             });
@@ -854,25 +851,13 @@ async fn receiver_network_routing_thread_manager(
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
                                 info!("receiver starts to register webrtc stream");
                                 // workaround to prevent receiver from dialing before sender is listening
-                                let webrtc_stream = register_webrtc_stream(&my_signaling_url, Some(peer_dialing_url)).await;
+                                let webrtc_stream = register_stream(&my_signaling_url, Some(peer_dialing_url)).await;
 
                                 info!("receiver registered webrtc stream");
                                 let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                                 let fib_tx_clone = fib_tx.clone();
-                                let _rtc_handle = tokio::spawn(webrtc_reader_and_writer(webrtc_stream, fib_tx_clone, local_to_rtc_rx));
+                                let _rtc_handle = tokio::spawn(reader_and_writer(fib_tx_clone, local_to_rtc_rx));
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                                // let topic_name_clone = topic_name.clone();
-                                // let topic_type_clone = topic_type.clone();
-                                // let certificate_clone = certificate.clone();
-                                // let topic_operation_tx = topic_operation_tx.clone();
-                                // let topic_creator_request = TopicModificationRequest {
-                                //     action: FibChangeAction::ADD,
-                                //     stream: Some(webrtc_stream),
-                                //     topic_name: topic_name_clone,
-                                //     topic_type: topic_type_clone,
-                                //     certificate:certificate_clone,
-                                // };
-                                // let _ = topic_operation_tx.send(topic_creator_request);
                             },
                             Err(e) => {
                                 eprintln!("ERROR: {}", e);
@@ -1098,66 +1083,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
                             }
                         }
                     }
-                    // "del" => {
-                    //     info!("deleting topic {:?}", payload);
-
-                    //     match payload.ros_op.as_str() {
-                    //         "pub" => {
-                    //             let topic_operation_tx = client_operation_tx.clone();
-                    //             let topic_creator_request = TopicManagerRequest {
-                    //                 action: TopicManagerAction::DELETE,
-                    //                 topic_name: payload.topic_name,
-                    //                 topic_type: payload.topic_type,
-                    //                 certificate: certificate.clone(),
-                    //             };
-                    //             let _ = topic_operation_tx.send(topic_creator_request);
-
-                    //         },
-                    //         "sub" => {
-                    //             let topic_operation_tx = service_operation_tx.clone();
-                    //             let topic_creator_request = TopicManagerRequest {
-                    //                 action: TopicManagerAction::DELETE,
-                    //                 topic_name: payload.topic_name,
-                    //                 topic_type: payload.topic_type,
-                    //                 certificate: certificate.clone(),
-                    //             };
-                    //             let _ = topic_operation_tx.send(topic_creator_request);
-                    //         }
-                    //         _ => {
-                    //             warn!("unknown action {}", payload.ros_op);
-                    //         }
-                    //     }
-                    // },
-                    // "resume" => {
-                    //     info!("resuming topic {:?}", payload);
-
-                    //     match payload.ros_op.as_str() {
-                    //         "pub" => {
-                    //             let topic_operation_tx = client_operation_tx.clone();
-                    //             let topic_creator_request = TopicManagerRequest {
-                    //                 action: TopicManagerAction::RESUME,
-                    //                 topic_name: payload.topic_name,
-                    //                 topic_type: payload.topic_type,
-                    //                 certificate: certificate.clone(),
-                    //             };
-                    //             let _ = topic_operation_tx.send(topic_creator_request);
-
-                    //         },
-                    //         "sub" => {
-                    //             let topic_operation_tx = service_operation_tx.clone();
-                    //             let topic_creator_request = TopicManagerRequest {
-                    //                 action: TopicManagerAction::RESUME,
-                    //                 topic_name: payload.topic_name,
-                    //                 topic_type: payload.topic_type,
-                    //                 certificate: certificate.clone(),
-                    //             };
-                    //             let _ = topic_operation_tx.send(topic_creator_request);
-                    //         }
-                    //         _ => {
-                    //             warn!("unknown action {}", payload.ros_op);
-                    //         }
-                    //     }
-                    // }
 
                     _ => {
                         info!("operation {} not handled!", payload.api_op);
