@@ -29,7 +29,6 @@ async fn router_async_loop() {
 
     future_handles.push(ros_service_manager_handle);
 
-
     let ros_api_server_handle = tokio::spawn(ros_api_server(topic_request_tx, service_request_tx));
     future_handles.push(ros_api_server_handle);
 

@@ -250,7 +250,6 @@ pub fn generate_gdp_name_from_string(input_str: &str) -> GDPName {
     // unsafe { transmute::<[u8; 4], u32>(bytes) }
 }
 
-
 #[derive(Debug, Clone)]
 pub struct GDPStatus {
     pub sink: UnboundedSender<GDPPacket>,

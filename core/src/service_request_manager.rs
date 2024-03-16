@@ -1,15 +1,15 @@
-use crate::logger::{Logger, handle_logs};
+use crate::logger::{handle_logs, Logger};
 use crate::structs::{GDPName, GDPPacket, GdpAction};
+use chrono;
 use serde::{Deserialize, Serialize};
-use tokio::fs::OpenOptions;
-use tokio::sync::mpsc;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::fs::File;
+use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt; // for write_all()
-use chrono;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
@@ -54,12 +54,10 @@ pub struct FibConnection {
     pub description: Option<String>,
 }
 
-
 #[derive(Debug)]
 pub struct FIBState {
     pub receivers: Vec<FibConnection>,
 }
-
 
 /// receive, check, and route GDP messages
 ///
@@ -82,7 +80,10 @@ pub async fn service_connection_fib_handler(
     let (tx, rx) = mpsc::unbounded_channel();
     let logger = Logger::new(tx);
 
-    let file_name = format!("/tmp/latency-{}.log", chrono::offset::Local::now().timestamp());
+    let file_name = format!(
+        "/tmp/latency-{}.log",
+        chrono::offset::Local::now().timestamp()
+    );
     println!("Logger file name is {}", file_name);
     let log_handler = tokio::spawn(handle_logs(rx, file_name));
 

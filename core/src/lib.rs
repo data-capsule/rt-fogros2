@@ -1,4 +1,5 @@
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
 // sub crates and primitives
 pub mod crypto;
@@ -14,11 +15,11 @@ pub mod db;
 pub mod pipeline;
 // util
 pub mod commands;
+pub mod logger;
 pub mod service_manager_udp;
 pub mod service_request_manager;
 pub mod topic_manager;
 pub mod util;
-pub mod logger;
 use utils::error::Result;
 
 pub fn start() -> Result<()> {

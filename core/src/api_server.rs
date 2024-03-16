@@ -36,7 +36,6 @@ struct AppState {
     service_tx: UnboundedSender<ROSTopicRequest>,
 }
 
-
 // basic handler that responds with a static string
 async fn root() -> &'static str {
     "Hello, World!"
@@ -60,7 +59,6 @@ async fn handle_ros_topic(
     (StatusCode::CREATED, Json(result))
 }
 
-
 #[axum_macros::debug_handler]
 // basic handler that responds with a static string
 async fn handle_ros_service(
@@ -77,7 +75,6 @@ async fn handle_ros_service(
     // with a status code of `201 Created`
     (StatusCode::CREATED, Json(result))
 }
-
 
 pub async fn ros_api_server(
     topic_request_tx: UnboundedSender<ROSTopicRequest>,

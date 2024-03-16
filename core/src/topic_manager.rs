@@ -18,7 +18,6 @@ use std::sync::{Arc, Mutex};
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-
 use crate::db::*;
 use futures::StreamExt;
 use redis_async::{client, resp::FromResp};
@@ -35,7 +34,6 @@ pub struct TopicModificationRequest {
     certificate: Vec<u8>,
 }
 
-
 // ROS subscriber -> webrtc (publish remotely)
 pub async fn ros_topic_remote_publisher_handler(
     mut status_recv: UnboundedReceiver<TopicModificationRequest>,
@@ -48,7 +46,6 @@ pub async fn ros_topic_remote_publisher_handler(
         connection_fib_handler(fib_rx, channel_rx).await;
     });
     join_handles.push(fib_handle);
-
 
     let ctx = r2r::Context::create().expect("context creation failure");
     let node = Arc::new(Mutex::new(
@@ -150,7 +147,6 @@ pub async fn ros_topic_remote_subscriber_handler(
     });
     join_handles.push(fib_handle);
 
-
     let ctx = r2r::Context::create().expect("context creation failure");
     let node = Arc::new(Mutex::new(
         r2r::Node::create(ctx, "sgc_remote_subscriber", "namespace")
@@ -166,7 +162,6 @@ pub async fn ros_topic_remote_subscriber_handler(
             .unwrap()
             .spin_once(std::time::Duration::from_millis(1));
     });
-
 
     let mut existing_topics = vec![];
 
@@ -251,7 +246,6 @@ pub async fn ros_topic_remote_subscriber_handler(
         }
     }
 }
-
 
 async fn create_new_remote_publisher(
     topic_gdp_name: GDPName, topic_name: String, topic_type: String, certificate: Vec<u8>,
@@ -574,7 +568,6 @@ pub async fn ros_topic_manager(mut topic_request_rx: UnboundedReceiver<ROSTopicR
     };
 
     let certificate = std::fs::read(crypto_path).expect("crypto file not found!");
-
 
     let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
     let topic_creator_handle = tokio::spawn(async move {

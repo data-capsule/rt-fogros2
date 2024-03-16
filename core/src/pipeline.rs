@@ -57,7 +57,6 @@ pub fn construct_gdp_response_with_guid(
     }
 }
 
-
 pub fn construct_gdp_packet_with_guid(
     action: GdpAction, destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
 ) -> GDPPacket {
@@ -70,7 +69,6 @@ pub fn construct_gdp_packet_with_guid(
         name_record: None,
     }
 }
-
 
 /// construct gdp struct from bytes
 /// bytes is put as payload

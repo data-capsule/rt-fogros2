@@ -1,12 +1,11 @@
 use crate::api_server::ROSTopicRequest;
 
-
 use crate::db::{
     add_entity_to_database_as_transaction, allow_keyspace_notification, get_entity_from_database,
     get_redis_address_and_port, get_redis_url,
 };
 
-use crate::network::udp::{register_stream, reader_and_writer};
+use crate::network::udp::{reader_and_writer, register_stream};
 
 use crate::pipeline::{
     construct_gdp_forward_from_bytes, construct_gdp_request_with_guid,
@@ -30,14 +29,11 @@ use std::sync::{Arc, Mutex};
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-
 use futures::StreamExt;
-
 
 use tokio::sync::mpsc::{self};
 
 use tokio::time::Duration;
-
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum TopicManagerAction {
@@ -49,14 +45,12 @@ pub enum TopicManagerAction {
     RESPONSE,
 }
 
-
 pub struct TopicManagerRequest {
     action: TopicManagerAction,
     topic_name: String,
     topic_type: String,
     certificate: Vec<u8>,
 }
-
 
 // ROS service(provider) -> webrtc (publish remotely); webrtc -> local service client
 pub async fn ros_remote_service_provider(
@@ -208,7 +202,6 @@ pub async fn ros_local_service_caller(
             .spin_once(std::time::Duration::from_millis(10));
     });
 
-
     let mut existing_topics = vec![];
 
     loop {
@@ -305,7 +298,6 @@ pub async fn ros_local_service_caller(
         }
     }
 }
-
 
 // local ROS topic(provider) -> webrtc (publish remotely)
 pub async fn ros_topic_remote_publisher(
@@ -420,7 +412,6 @@ pub async fn ros_topic_remote_subscriber(
             .spin_once(std::time::Duration::from_millis(10));
     });
 
-
     let mut existing_topics = vec![];
 
     loop {
@@ -505,7 +496,6 @@ pub async fn ros_topic_remote_subscriber(
         }
     }
 }
-
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct RosTopicStatus {
@@ -672,10 +662,8 @@ async fn sender_network_routing_thread_manager(
 
                             let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                             // let sender_url = "sender".to_string();
-                            let _rtc_handle = tokio::spawn(reader_and_writer(
-                                fib_tx.clone(),
-                                local_to_rtc_rx,
-                            ));
+                            let _rtc_handle =
+                                tokio::spawn(reader_and_writer(fib_tx.clone(), local_to_rtc_rx));
                             let channel_update_msg = FibStateChange {
                             action: FibChangeAction::ADD,
                             topic_gdp_name: topic_gdp_name,
@@ -701,7 +689,6 @@ async fn sender_network_routing_thread_manager(
     // Wait for all tasks to complete
     // futures::future::join_all(join_handles).await;
 }
-
 
 // webrtc -> fib
 async fn receiver_network_routing_thread_manager(
@@ -930,7 +917,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     });
     waiting_rib_handles.push(topic_creator_handle);
 
-
     let fib_tx_clone = fib_tx.clone();
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
     let sender_routing_manager_handle = tokio::spawn(async move {
@@ -945,7 +931,6 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
         receiver_network_routing_thread_manager(receiver_routing_rx, fib_tx_clone).await
     });
     waiting_rib_handles.push(receiver_routing_manager_handle);
-
 
     loop {
         select! {

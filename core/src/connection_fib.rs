@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
     ADD,
@@ -21,7 +20,6 @@ pub enum TopicStateInFIB {
     DELETED,
 }
 
-
 #[derive(Debug)]
 pub struct FibStateChange {
     pub action: FibChangeAction,
@@ -34,7 +32,6 @@ pub struct FIBState {
     pub state: TopicStateInFIB,
     pub receivers: Vec<UnboundedSender<GDPPacket>>,
 }
-
 
 /// receive, check, and route GDP messages
 ///
@@ -142,7 +139,6 @@ pub async fn connection_fib_handler(
     }
 }
 
-
 // async fn send_to_destination(destinations: Vec<GDPChannel>, packet: GDPPacket) {
 //     for dst in destinations {
 //         info!(
@@ -171,7 +167,6 @@ pub async fn connection_fib_handler(
 //         }
 //     }
 // }
-
 
 // pub async fn connection_fib(
 //     mut fib_rx: UnboundedReceiver<GDPPacket>, rib_query_tx: UnboundedSender<GDPNameRecord>,
