@@ -599,110 +599,58 @@ async fn sender_network_routing_thread_manager(
                 ::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1).await
                 .expect("Cannot connect to Redis");
             let topic = format!("__keyspace@0__:{}", receiver_topic);
-            let mut msgs = pubsub_con.psubscribe(&topic).await.expect("Cannot subscribe to topic");
 
-            let receivers = get_entity_from_database(&redis_url, &receiver_topic).expect(
-                "Cannot get receiver from database"
+            let topic_name_clone = topic_name.clone();
+            let topic_type_clone = topic_type.clone();
+            let _certificate_clone = certificate.clone();
+            let sender_topic = sender_topic.clone();
+            let channel_tx = channel_tx.clone();
+            let fib_tx_clone = fib_tx.clone();
+            let redis_url = redis_url.clone();
+            let sender_listening_gdp_name_clone = sender_listening_gdp_name.clone();
+
+            let sender_url = format!(
+                "{},{}",
+                gdp_name_to_string(topic_gdp_name),
+                gdp_name_to_string(sender_listening_gdp_name_clone),
             );
-            info!("receiver list {:?} for key {}", receivers, receiver_topic);
+            info!("sender listening for signaling url {}", sender_url);
 
-            let tasks = receivers
-                .clone()
-                .into_iter()
-                .map(|receiver| {
-                    let topic_name_clone = topic_name.clone();
-                    let topic_type_clone = topic_type.clone();
-                    let _certificate_clone = certificate.clone();
-                    let sender_topic = sender_topic.clone();
-                    let channel_tx = channel_tx.clone();
-                    let fib_tx_clone = fib_tx.clone();
-                    let redis_url = redis_url.clone();
-                    let sender_listening_gdp_name_clone = sender_listening_gdp_name.clone();
+            add_entity_to_database_as_transaction(
+                &redis_url,
+                &sender_topic,
+                &sender_url
+            ).expect("Cannot add sender to database");
+            info!(
+                "sender {} added to database of channel {}",
+                &sender_url,
+                sender_topic
+            );
 
-                    tokio::spawn(async move {
-                        info!("receiver {}", receiver);
-                        let sender_url = format!(
-                            "{},{},{}",
-                            gdp_name_to_string(topic_gdp_name),
-                            gdp_name_to_string(sender_listening_gdp_name_clone),
-                            receiver
-                        );
-                        info!("sender listening for signaling url {}", sender_url);
+            info!("sender registered webrtc stream");
 
-                        add_entity_to_database_as_transaction(
-                            &redis_url,
-                            &sender_topic,
-                            &sender_url
-                        ).expect("Cannot add sender to database");
-                        info!(
-                            "sender {} added to database of channel {}",
-                            &sender_url,
-                            sender_topic
-                        );
-
-                        info!("sender registered webrtc stream");
-
-                        let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                        let _rtc_handle = tokio::spawn(
-                            reader_and_writer(fib_tx_clone, local_to_rtc_rx)
-                        );
-                        let channel_update_msg = FibStateChange {
-                            action: FibChangeAction::ADD,
-                            topic_gdp_name: topic_gdp_name,
-                            connection_type: connection_type,
-                            forward_destination: Some(local_to_rtc_tx),
-                            description: Some(
-                                format!(
-                                    "webrtc stream for topic_name {}, topic_type {}, receiver {}, connection_type {:?}",
-                                    topic_name_clone,
-                                    topic_type_clone,
-                                    receiver,
-                                    connection_type
-                                )
-                            ),
-                        };
-                        let _ = channel_tx.send(channel_update_msg);
-                        info!("remote sender sent channel update message");
-                    })
-                });
-            let mut tasks = tasks.collect::<Vec<_>>();
-
-            let message_handling_task_handle = tokio::spawn(async move {
-                loop {
-                    let message = msgs.next().await;
-                    match message {
-                        Some(message) => {
-                            let received_operation = String::from_resp(message.unwrap()).unwrap();
-                            info!("KVS {}", received_operation);
-                            if received_operation != "lpush" {
-                                info!("the operation is not lpush, ignore");
-                                continue;
-                            }
-                            let updated_receivers = get_entity_from_database(
-                                &redis_url,
-                                &receiver_topic
-                            ).expect("Cannot get receiver from database");
-                            info!("get a list of receivers from KVS {:?}", updated_receivers);
-                            let receiver = updated_receivers.first().unwrap(); // first or last?
-                            if receivers.clone().contains(receiver) {
-                                warn!("receiver {} already in the list, ignore", receiver);
-                                continue;
-                            }
-                        }
-                        None => {
-                            info!("message is none");
-                        }
-                    }
-                }
-            });
-            tasks.push(message_handling_task_handle);
-            futures::future::join_all(tasks).await;
-            info!("all the mailboxes are checked!");
+            let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+            let _rtc_handle = tokio::spawn(
+                reader_and_writer(fib_tx_clone, local_to_rtc_rx)
+            );
+            let channel_update_msg = FibStateChange {
+                action: FibChangeAction::ADD,
+                topic_gdp_name: topic_gdp_name,
+                connection_type: connection_type,
+                forward_destination: Some(local_to_rtc_tx),
+                description: Some(
+                    format!(
+                        "webrtc stream for topic_name {}, topic_type {}, connection_type {:?}",
+                        topic_name_clone,
+                        topic_type_clone,
+                        connection_type,
+                    )
+                ),
+            };
+            let _ = channel_tx.send(channel_update_msg);
+            info!("remote sender sent channel update message");
         });
     }
-
-    // Wait for all tasks to complete
-    // futures::future::join_all(join_handles).await;
 }
 
 // udp -> fib

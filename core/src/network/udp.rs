@@ -216,7 +216,7 @@ pub async fn reader_and_writer(
                 //insert the first null byte to separate the packet header
                 header_string.push(0u8 as char);
                 let header_string_payload = header_string.as_bytes();
-                match stream.send_to(&header_string_payload[..header_string_payload.len()], "0.0.0.0:9999").await {
+                match stream.send_to(&header_string_payload[..header_string_payload.len()], "0.0.0.0:8888").await {
                     Ok(_) => {},
                     Err(e) => {
                         warn!("The connection is closed: {}", e);
@@ -227,14 +227,14 @@ pub async fn reader_and_writer(
                 // stream.write_all(&packet.payload[..packet.payload.len()]).await.unwrap();
                 if let Some(payload) = pkt_to_forward.payload {
                     info!("the payload length is {}", payload.len());
-                    stream.send_to(&payload[..payload.len()], "0.0.0.0:9999").await.unwrap();
+                    stream.send_to(&payload[..payload.len()], "0.0.0.0:8888").await.unwrap();
                 }
 
                 if let Some(name_record) = pkt_to_forward.name_record {
                     let name_record_string = serde_json::to_string(&name_record).unwrap();
                     let name_record_buffer = name_record_string.as_bytes();
                     info!("the name record length is {}", name_record_buffer.len());
-                    stream.send_to(&name_record_buffer[..name_record_buffer.len()], "0.0.0.0:9999").await.unwrap();
+                    stream.send_to(&name_record_buffer[..name_record_buffer.len()], "0.0.0.0:8888").await.unwrap();
                 }
             }
 
