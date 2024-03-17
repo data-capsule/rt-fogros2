@@ -160,7 +160,9 @@ class SGC_Router_Node(rclpy.node.Node):
         # else:
         #     subprocess.Popen(f"{sgc_path}/target/debug/gdp-router router", env=current_env,  shell=True)
 
-        # subprocess.Popen(f"cd {sgc_path} && RUST_LOG=info cargo xtask run", env=current_env,  shell=True)
+        subprocess.call(f"cd {sgc_path} && cargo build", env=current_env,  shell=True)
+        subprocess.Popen(f"cd {sgc_path} && RUST_LOG=info cargo xtask run", env=current_env,  shell=True)
+        
         # if release_mode:
         #     # subprocess.call(f"cargo build --release --manifest-path {sgc_path}/Cargo.toml", env=current_env,  shell=True)
         #     subprocess.Popen(f"{sgc_path}/target/release/gdp-router router", env=current_env,  shell=True)

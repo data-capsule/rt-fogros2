@@ -446,7 +446,7 @@ class SGC_Swarm:
             receiver_url,
             connection_type,
         ):
-            sleep(random.randint(1, 10) * 0.5) # TODO: a hack to prevent sending at the same time 
+            # sleep(random.randint(1, 10) * 0.5) # TODO: a hack to prevent sending at the same time 
             self.logger.info(
                 f"send routing request service {[addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type]}"
             )
