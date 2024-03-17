@@ -565,16 +565,16 @@ async fn sender_network_routing_thread_manager(
                 "sub" => FibConnectionType::SENDER,
                 _ => FibConnectionType::BIDIRECTIONAL,
             };
-            info!("handling routing request {:?}", request);
+            // info!("handling routing request {:?}", request);
             warn!("sender_network_routing_thread_manager {:?}", connection_type);
 
             let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
             let _rtc_handle = tokio::spawn(
                 reader_and_writer(
                     topic_gdp_name,
-                    "sender",
-                    fib_tx, 
-                    local_to_rtc_rx
+                    format!("{}-{}", "receiver", request.connection_type.unwrap()),
+                    fib_tx,
+                    local_to_rtc_rx,
                 )
             );
             let channel_update_msg = FibStateChange {
@@ -616,7 +616,7 @@ async fn receiver_network_routing_thread_manager(
             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
             let _rtc_handle = tokio::spawn(reader_and_writer(
                 topic_gdp_name,
-                "receiver",
+                format!("{}-{}", "sender", request.connection_type.unwrap()),
                 fib_tx, 
                 local_to_rtc_rx));
         });

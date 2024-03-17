@@ -175,7 +175,7 @@ pub async fn get_socket_stun(socket: &UdpSocket)  -> Result<SocketAddr, std::io:
 #[allow(unused_assignments)]
 pub async fn reader_and_writer(
     topic_gdp_name: GDPName,
-    direction: &str, // Sender or Receiver
+    direction: String, // Sender or Receiver
     ros_tx : UnboundedSender<GDPPacket>,       // send to ros
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
@@ -196,7 +196,7 @@ pub async fn reader_and_writer(
 
     register_stream(
         topic_gdp_name,
-        direction,
+        direction.as_str(),
         sock_public_addr.unwrap(),
     ).await;
 
