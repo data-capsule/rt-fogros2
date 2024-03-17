@@ -26,6 +26,14 @@ FogROS2-SGC is a cloud robotics platform for connecting disjoint ROS2 networks a
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+### eBPF 
+
+```
+cargo xtask build-ebpf
+RUST_LOG=info cargo xtask run
+RUST_LOG=info cargo run --bin fogros_ebpf
+```
+
 ## Local Demo 
 If you want to get a taste of FogROS2 SGC without setting up the environment, just run 
 ```

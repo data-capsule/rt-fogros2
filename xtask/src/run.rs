@@ -47,16 +47,26 @@ pub fn run(opts: Options) -> Result<(), anyhow::Error> {
 
     // profile we are building (release or debug)
     let profile = if opts.release { "release" } else { "debug" };
-    let bin_path = format!("target/{profile}/tc-egress");
+    let bin_path = format!("target/{profile}/gdp-router");
 
     // arguments to pass to the application
     let mut run_args: Vec<_> =
         opts.run_args.iter().map(String::as_str).collect();
 
     // configure args
-    let mut args: Vec<_> = opts.runner.trim().split_terminator(' ').collect();
-    args.push(bin_path.as_str());
-    args.append(&mut run_args);
+    // let mut args: Vec<_> = opts.runner.trim().split_terminator(' ').collect();
+    // args.push(bin_path.as_str());
+    // args.append(&mut run_args);
+
+    // sudo -E env \"PYTHONPATH=$PYTHONPATH\" \"LD_LIBRARY_PATH=$LD_LIBRARY_PATH\" \"PATH=$PATH\" \"USER=$USER\"  bash -c "source /home/ubuntu/ebpf_ws/install/setup.bash target/debug/gdp-router"
+    let args: Vec<_> = [
+        "sudo", 
+        "-E",
+        "bash",
+        "-c",
+        "source \"/home/ubuntu/ebpf_ws/install/setup.bash\" && target/debug/gdp-router router",
+    ].to_vec();
+
 
     // run the command
     let status = Command::new(args.first().expect("No first argument"))

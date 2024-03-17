@@ -49,6 +49,8 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
         (*ip_hdr).dst_addr
     });
 
+    info!(&ctx, "DEST {:x}", destination);
+
     let action = if block_ip(destination) {
 
         let ifindex = 2; // Target interface index
