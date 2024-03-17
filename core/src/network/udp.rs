@@ -6,20 +6,27 @@ use crate::structs::{generate_random_gdp_name, GDPName};
 use crate::structs::{GDPPacket, GdpAction, Packet};
 use crate::util::get_signaling_server_address;
 use tokio::net::UdpSocket;
-
+use std::str::FromStr;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 const UDP_BUFFER_SIZE: usize = 1748000; // 17kb
 
-use async_datachannel::{DataStream, Message, PeerConnection, RtcConfig};
-use async_tungstenite::{tokio::connect_async, tungstenite};
-use futures::{
-    channel::mpsc,
-    io::{AsyncReadExt, AsyncWriteExt},
-    SinkExt, StreamExt,
-};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tracing::info;
+use std::net::{SocketAddr};
+use librice::candidate::TransportType;
+use librice::stun::attribute::*;
+use librice::stun::message::*;
+
+use crate::db::{
+    add_entity_to_database_as_transaction,
+    allow_keyspace_notification,
+    get_entity_from_database,
+    get_redis_address_and_port,
+    get_redis_url,
+};
+
+
 // use utils::app_config::AppConfig;
 
 /// parse the header of the packet using the first null byte as delimiter
@@ -83,37 +90,93 @@ pub fn parse_header_payload_pairs(
 /// 1. RUST_LOG=debug cargo run --example smoke -- ws://127.0.0.1:8000 other_peer
 /// 2. RUST_LOG=debug cargo run --example smoke -- ws://127.0.0.1:8000 initiator other_peer
 
-#[derive(Debug, Serialize, Deserialize)]
-struct SignalingMessage {
-    // id of the peer this messaged is supposed for
-    id: String,
-    payload: Message,
+
+fn parse_response(response: Message) -> Result<SocketAddr, std::io::Error> {
+    if Message::check_attribute_types(
+        &response,
+        &[XOR_MAPPED_ADDRESS, FINGERPRINT],
+        &[XOR_MAPPED_ADDRESS],
+    )
+    .is_some()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Required attributes not found in response",
+        ));
+    }
+    if response.has_class(MessageClass::Success) {
+        // presence checked by check_attribute_types() above
+        let mapped_address = response
+            .attribute::<XorMappedAddress>(XOR_MAPPED_ADDRESS)
+            .unwrap();
+        let visible_addr = mapped_address.addr(response.transaction_id());
+        println!("found visible address {:?}", visible_addr);
+        Ok(visible_addr)
+    } else if response.has_class(MessageClass::Error) {
+        println!("got error response {:?}", response);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Error response",
+        ))
+    } else {
+        println!("got unknown response {:?}", response);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Unknown response",
+        ))
+    }
 }
 
-pub async fn register_stream(my_id: &str, peer_to_dial: Option<String>) {
-    // let config = AppConfig::fetch().expect("Failed to fetch config");
-    let ice_servers = vec!["stun:stun.l.google.com:19302"];
-    let conf = RtcConfig::new(&ice_servers);
-    let (tx_sig_outbound, mut rx_sig_outbound) = mpsc::channel(32);
-    let (mut tx_sig_inbound, rx_sig_inbound) = mpsc::channel(32);
-    let listener = PeerConnection::new(&conf, (tx_sig_outbound, rx_sig_inbound)).unwrap();
 
-    let signaling_uri = get_signaling_server_address();
-    let signaling_uri = format!("{}/{}", signaling_uri, my_id);
-    info!("The signaling URI is {}", signaling_uri);
+async fn udp_ice_get(socket: &UdpSocket, out: Message, to: SocketAddr) -> Result<SocketAddr, std::io::Error> {
 
-    UdpSocket::bind("0.0.0.0:8888").await;
+    info!("generated to {}", out);
+    let buf = out.to_bytes();
+    trace!("generated to {:?}", buf);
+    socket.send_to(&buf, to).await?;
+    let mut buf = [0; 1500];
+    let (amt, src) = socket.recv_from(&mut buf).await?;
+    let buf = &buf[..amt];
+    trace!("got {:?}", buf);
+    let msg = Message::from_bytes(buf)
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid message"))?;
+    info!(
+        "got from {:?} to {:?} {}",
+        src,
+        socket.local_addr().unwrap(),
+        msg
+    );
+
+    parse_response(msg)
+}
+
+
+pub async fn register_stream(
+    topic_gdp_name: GDPName,
+    sock_public_addr: SocketAddr,
+){
+    let redis_url = get_redis_url();
+    add_entity_to_database_as_transaction(
+        &redis_url,
+        format!("{:?}", topic_gdp_name).as_str(),
+        sock_public_addr.to_string().as_str(),
+    );
+}
+
+pub async fn get_socket_stun(socket: &UdpSocket)  -> Result<SocketAddr, std::io::Error>{
+    let ice_server = SocketAddr::from_str("127.0.0.1:3478").unwrap();
+    let mut msg = Message::new_request(BINDING);
+    msg.add_fingerprint().unwrap();
+
+    udp_ice_get(socket, msg, ice_server).await
 }
 
 #[allow(unused_assignments)]
 pub async fn reader_and_writer(
-    ros_tx: UnboundedSender<GDPPacket>,       // send to ros
+    topic_gdp_name: GDPName,
+    ros_tx : UnboundedSender<GDPPacket>,       // send to ros
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
-    // tracing_subscriber::fmt::init();
-    // let mut stream = register_webrtc_stream(my_id, peer_to_dial).await;
-
-    let thread_name: GDPName = generate_random_gdp_name();
     let mut need_more_data_for_previous_header = false;
     let mut remaining_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
         action: GdpAction::Noop,
@@ -125,7 +188,14 @@ pub async fn reader_and_writer(
     let mut remaining_gdp_payload: Vec<u8> = vec![];
     let mut reset_counter = 0; // TODO: a temporary counter to reset the connection
 
-    let stream = UdpSocket::bind("0.0.0.0:8888").await.unwrap();
+    let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+    let sock_public_addr = get_socket_stun(&stream).await;
+    info!("UDP socket is bound to {:?}", sock_public_addr);
+
+    register_stream(
+        topic_gdp_name,
+        sock_public_addr.unwrap(),
+    ).await;
 
     loop {
         let mut receiving_buf = vec![0u8; UDP_BUFFER_SIZE];
