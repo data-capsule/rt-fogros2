@@ -40,6 +40,7 @@ async fn router_async_loop() {
         ros_service_manager(service_request_rx).await;
     });
 
+    future_handles.push(tokio::spawn(ebpf()));
     future_handles.push(ros_service_manager_handle);
 
     let ros_api_server_handle = tokio::spawn(ros_api_server(topic_request_tx, service_request_tx));
@@ -74,6 +75,7 @@ pub async fn ebpf() {
     program.load();
     program.attach("ens5", TcAttachType::Egress);
 
+    warn!("interface attached!");
     // (1)
     let mut blocklist: HashMap<_, u32, u32> =
         HashMap::try_from(bpf.map_mut("BLOCKLIST").unwrap()).unwrap();
@@ -83,6 +85,10 @@ pub async fn ebpf() {
 
     // (3)
     blocklist.insert(block_addr, 0, 0);
+
+    while true {
+        std::thread::sleep(std::time::Duration::from_millis(10000));
+    }
 
 }
 

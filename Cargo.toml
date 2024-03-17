@@ -35,7 +35,7 @@ core = { path = "core" }
 human-panic = "1.0.3"
 better-panic = "0.3.0"
 log = { version = "0.4.14", features = ["release_max_level_off"] }
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 
 [dev-dependencies]
 assert_cmd = "2.0.4"

@@ -5,7 +5,7 @@ use aya_ebpf::{
     bindings::{TC_ACT_OK, TC_ACT_PIPE, TC_ACT_SHOT}, helpers::{bpf_clone_redirect, bpf_csum_diff}, macros::{classifier, map}, maps::HashMap, programs::TcContext
 };
 
-use aya_log_ebpf::info;
+use aya_log_ebpf::{info, warn};
 use network_types::{
     eth::{EthHdr, EtherType},
     ip::Ipv4Hdr,
@@ -48,8 +48,6 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
     let destination = u32::from_be( unsafe {
         (*ip_hdr).dst_addr
     });
-
-    info!(&ctx, "DEST {:x}", destination);
 
     let action = if block_ip(destination) {
 
