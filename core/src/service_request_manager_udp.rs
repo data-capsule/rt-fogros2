@@ -162,16 +162,6 @@ pub async fn service_connection_fib_handler(
                                     error!("The gdpname {:?} does not exist", pkt.gdpname)
                                 }
                             }
-                            // send it back with response forwarding table
-                            // let dst = response_forwarding_table.get(&pkt.gdpname);
-                            // match dst {
-                            //     Some(v) => {
-                            //         let _ = v.send(pkt.clone());
-                            //     },
-                            //     None => {
-                            //         error!("the response channel does not exist");
-                            //     }
-                            // }
                         }
                     },
 
@@ -183,17 +173,13 @@ pub async fn service_connection_fib_handler(
 
             }
 
-
             // update the table
             Some(update) = channel_rx.recv() => {
                 match update.action {
                     FibChangeAction::ADD => {
                         info!("update status received {:?}", update);
-
                         match  rib_state_table.get_mut(&update.topic_gdp_name) {
                             Some(v) => {
-                                // v.state = TopicStateInFIB::RUNNING;
-                                // v.receivers.push(update.forward_destination.unwrap());
                                 info!("local topic interface {:?} is added", update);
                                 v.receivers.push(FibConnection{
                                     state: TopicStateInFIB::RUNNING,
@@ -201,14 +187,9 @@ pub async fn service_connection_fib_handler(
                                     tx: update.forward_destination.unwrap(),
                                     description: update.description,
                                 });
-
                             }
                             None =>{
                                 info!("Creating a new entry of {:?}", update);
-                                // let state = FIBState {
-                                //     state: TopicStateInFIB::RUNNING,
-                                //     receivers: vec!(update.forward_destination.unwrap()),
-                                // };
                                 let state = FIBState {
                                     receivers: vec!(FibConnection{
                                         state: TopicStateInFIB::RUNNING,
@@ -223,57 +204,11 @@ pub async fn service_connection_fib_handler(
                                 );
                             }
                         };
-                        // TODO: pause add
                     },
-                    FibChangeAction::STATE => {
-
-                    },
-                    // FibChangeAction::RESPONSE => {
-                    //     info!("Response channel received {:?}", update);
-                    //     // insert the response channel
-                    //     response_forwarding_table.insert(update.topic_gdp_name, update.forward_destination.unwrap());
-                    // }
-                    FibChangeAction::PAUSE => todo!(),
-                    FibChangeAction::PAUSEADD => todo!(),
-                    FibChangeAction::RESUME => todo!(),
-                    FibChangeAction::DELETE => todo!(),
-                    // FibChangeAction::PAUSEADD => {
-                    //     //todo pause
-                    // },
-                    // FibChangeAction::PAUSE => {
-                    //     info!("Pausing GDP Name {:?}", update.topic_gdp_name);
-                    //     match  rib_state_table.get_mut(&update.topic_gdp_name) {
-                    //         Some(v) => {
-                    //             v.state = TopicStateInFIB::PAUSED;
-                    //         }
-                    //         None =>{
-                    //             error!("pausing non existing state!");
-                    //         }
-                    //     };
-                    // },
-                    // FibChangeAction::RESUME => {
-                    //     info!("Deleting GDP Name {:?}", update.topic_gdp_name);
-                    //     match  rib_state_table.get_mut(&update.topic_gdp_name) {
-                    //         Some(v) => {
-                    //             v.state = TopicStateInFIB::RUNNING;
-                    //         }
-                    //         None =>{
-                    //             error!("resuming non existing state!");
-                    //         }
-                    //     };
-                    // },
-                    // FibChangeAction::DELETE => {
-                    //     info!("Deleting GDP Name {:?}", update.topic_gdp_name);
-                    //     // rib_state_table.remove(&update.topic_gdp_name);
-                    //     match  rib_state_table.get_mut(&update.topic_gdp_name) {
-                    //         Some(v) => {
-                    //             v.state = TopicStateInFIB::DELETED;
-                    //         }
-                    //         None =>{
-                    //             error!("deleting non existing state!");
-                    //         }
-                    //     };
-                    // },
+                    _ => {
+                        error!("Unknown action {:?}", update.action);
+                        continue;
+                    }
                 }
             }
         }
