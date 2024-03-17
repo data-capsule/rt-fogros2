@@ -153,12 +153,13 @@ async fn udp_ice_get(socket: &UdpSocket, out: Message, to: SocketAddr) -> Result
 
 pub async fn register_stream(
     topic_gdp_name: GDPName,
+    direction: &str, // Sender or Receiver
     sock_public_addr: SocketAddr,
 ){
     let redis_url = get_redis_url();
-    add_entity_to_database_as_transaction(
+    let _ = add_entity_to_database_as_transaction(
         &redis_url,
-        format!("{:?}", topic_gdp_name).as_str(),
+        format!("{:?}-{:}", topic_gdp_name, direction).as_str(),
         sock_public_addr.to_string().as_str(),
     );
 }
@@ -174,6 +175,7 @@ pub async fn get_socket_stun(socket: &UdpSocket)  -> Result<SocketAddr, std::io:
 #[allow(unused_assignments)]
 pub async fn reader_and_writer(
     topic_gdp_name: GDPName,
+    direction: &str, // Sender or Receiver
     ros_tx : UnboundedSender<GDPPacket>,       // send to ros
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
@@ -194,6 +196,7 @@ pub async fn reader_and_writer(
 
     register_stream(
         topic_gdp_name,
+        direction,
         sock_public_addr.unwrap(),
     ).await;
 

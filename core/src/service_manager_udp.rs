@@ -572,8 +572,10 @@ async fn sender_network_routing_thread_manager(
             let _rtc_handle = tokio::spawn(
                 reader_and_writer(
                     topic_gdp_name,
+                    "sender",
                     fib_tx, 
-                    local_to_rtc_rx)
+                    local_to_rtc_rx
+                )
             );
             let channel_update_msg = FibStateChange {
                 action: FibChangeAction::ADD,
@@ -614,6 +616,7 @@ async fn receiver_network_routing_thread_manager(
             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
             let _rtc_handle = tokio::spawn(reader_and_writer(
                 topic_gdp_name,
+                "receiver",
                 fib_tx, 
                 local_to_rtc_rx));
         });
