@@ -145,7 +145,7 @@ async fn udp_ice_get(socket: &UdpSocket, out: Message, to: SocketAddr) -> Result
 
 
 pub async fn get_socket_stun(socket: &UdpSocket)  -> Result<SocketAddr, std::io::Error>{
-    let ice_server = SocketAddr::from_str("127.0.0.1:3478").unwrap();
+    let ice_server = SocketAddr::from_str("3.18.194.127:3478").unwrap();
     let mut msg = Message::new_request(BINDING);
     msg.add_fingerprint().unwrap();
 
