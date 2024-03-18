@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{env, process::Command};
 
 use anyhow::Context as _;
 use clap::Parser;
@@ -59,12 +59,19 @@ pub fn run(opts: Options) -> Result<(), anyhow::Error> {
     // args.append(&mut run_args);
 
     // sudo -E env \"PYTHONPATH=$PYTHONPATH\" \"LD_LIBRARY_PATH=$LD_LIBRARY_PATH\" \"PATH=$PATH\" \"USER=$USER\"  bash -c "source /home/ubuntu/ebpf_ws/install/setup.bash target/debug/gdp-router"
+    
+    let ros_domain_id = match env::var_os("ROS_DOMAIN_ID") {
+        Some(id) => id.into_string().unwrap().parse().unwrap(),
+        None => 0,
+    };
+
+    let ros_cmd = format!("source \"/home/ubuntu/ebpf_ws/install/setup.bash\" && RMW_IMPLEMENTATION=rmw_cyclonedds_cpp ROS_DOMAIN_ID={} target/debug/gdp-router router", ros_domain_id);
     let args: Vec<_> = [
         "sudo", 
         "-E",
         "bash",
         "-c",
-        "source \"/home/ubuntu/ebpf_ws/install/setup.bash\" && RMW_IMPLEMENTATION=rmw_cyclonedds_cpp target/debug/gdp-router router",
+        &ros_cmd,
     ].to_vec();
 
 

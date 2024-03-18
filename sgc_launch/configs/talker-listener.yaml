@@ -34,3 +34,8 @@ state_machine:
 assignment:
   machine_talker: talker
   machine_listener: listener
+
+topology:
+  machine_talker:
+    children: 
+      - machine_listener

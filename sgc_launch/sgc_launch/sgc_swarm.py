@@ -82,7 +82,6 @@ class SGC_Swarm:
         self._load_identifiers(config)
         self._load_services(config)
         self._load_topics(config)
-        print_tree(self.build_tree(config["topology"]))
         self._load_state_machine(config)
 
     """
@@ -250,6 +249,8 @@ class SGC_Swarm:
             self.topic_dict[topic["topic_name"]] = topic["topic_type"]
 
     def _load_services(self, config):
+        if "services" not in config:
+            return
         for service in config["services"]:
             self.service_dict[service["service_name"]] = service["service_type"]
 
