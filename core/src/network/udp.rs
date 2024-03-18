@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::ebpf_routing_manager::register_stream;
 use crate::pipeline::construct_gdp_packet_with_guid;
 use crate::structs::GDPHeaderInTransit;
 use crate::structs::{generate_random_gdp_name, GDPName};
@@ -17,14 +18,6 @@ use std::net::{SocketAddr};
 use librice::candidate::TransportType;
 use librice::stun::attribute::*;
 use librice::stun::message::*;
-
-use crate::db::{
-    add_entity_to_database_as_transaction,
-    allow_keyspace_notification,
-    get_entity_from_database,
-    get_redis_address_and_port,
-    get_redis_url,
-};
 
 
 // use utils::app_config::AppConfig;
@@ -151,19 +144,6 @@ async fn udp_ice_get(socket: &UdpSocket, out: Message, to: SocketAddr) -> Result
 }
 
 
-pub async fn register_stream(
-    topic_gdp_name: GDPName,
-    direction: &str, // Sender or Receiver
-    sock_public_addr: SocketAddr,
-){
-    let redis_url = get_redis_url();
-    let _ = add_entity_to_database_as_transaction(
-        &redis_url,
-        format!("{:?}-{:}", topic_gdp_name, direction).as_str(),
-        sock_public_addr.to_string().as_str(),
-    );
-}
-
 pub async fn get_socket_stun(socket: &UdpSocket)  -> Result<SocketAddr, std::io::Error>{
     let ice_server = SocketAddr::from_str("127.0.0.1:3478").unwrap();
     let mut msg = Message::new_request(BINDING);
@@ -194,11 +174,11 @@ pub async fn reader_and_writer(
     let sock_public_addr = get_socket_stun(&stream).await;
     info!("UDP socket is bound to {:?}", sock_public_addr);
 
-    register_stream(
+    let handle = tokio::spawn(register_stream(
         topic_gdp_name,
-        direction.as_str(),
+        direction,
         sock_public_addr.unwrap(),
-    ).await;
+    ));
 
     loop {
         let mut receiving_buf = vec![0u8; UDP_BUFFER_SIZE];
@@ -319,6 +299,9 @@ pub async fn reader_and_writer(
             },
         }
     }
+
+    futures::join!(handle);
+    
     // loop {
     //     let n = dc.read(&mut buf).await.unwrap();
     //     println!("Read: \"{}\"", String::from_utf8_lossy(&buf[..n]));

@@ -1,7 +1,7 @@
 use crate::api_server::ROSTopicRequest;
 
 
-use crate::network::udp::{ reader_and_writer, register_stream };
+use crate::network::udp::{ reader_and_writer};
 
 use crate::pipeline::{
     construct_gdp_forward_from_bytes,
