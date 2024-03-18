@@ -1,6 +1,7 @@
 use crate::api_server::ROSTopicRequest;
 
 
+use crate::ebpf_routing_manager::NewEbpfTopicRequest;
 use crate::network::udp::{ reader_and_writer};
 
 use crate::pipeline::{
@@ -535,6 +536,7 @@ pub struct RoutingManagerRequest {
 
 // fib -> udp
 async fn sender_network_routing_thread_manager(
+    ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
     mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
     fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>
@@ -544,11 +546,13 @@ async fn sender_network_routing_thread_manager(
     while let Some(request) = request_rx.recv().await {
         let fib_tx = fib_tx.clone();
         let channel_tx = channel_tx.clone();
+        let ebpf_tx = ebpf_tx.clone();
         tokio::spawn(async move {
             let topic_name = request.topic_name.clone();
             let topic_type = request.topic_type.clone();
             let certificate = request.certificate.clone();
             let fib_tx = fib_tx.clone();
+            let ebpf_tx = ebpf_tx.clone();
             let topic_gdp_name = GDPName(
                 get_gdp_name_from_topic(&topic_name, &topic_type, &certificate)
             );
@@ -568,6 +572,7 @@ async fn sender_network_routing_thread_manager(
                     topic_gdp_name,
                     format!("{}-{}", request.connection_type.unwrap(), "sender"),
                     fib_tx,
+                    ebpf_tx,
                     local_to_rtc_rx,
                 )
             );
@@ -593,16 +598,19 @@ async fn sender_network_routing_thread_manager(
 
 // udp -> fib
 async fn receiver_network_routing_thread_manager(
+    ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
     mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
     fib_tx: UnboundedSender<GDPPacket>
 ) {
     while let Some(request) = request_rx.recv().await {
         let fib_tx = fib_tx.clone();
+        let ebpf_tx = ebpf_tx.clone();
         tokio::spawn(async move {
-            
+            let ebpf_tx = ebpf_tx.clone();
             let topic_name = request.topic_name.clone();
             let topic_type = request.topic_type.clone();
             let certificate = request.certificate.clone();
+            let ebpf_tx = ebpf_tx.clone();
             let topic_gdp_name = GDPName(
                 get_gdp_name_from_topic(&topic_name, &topic_type, &certificate)
             );
@@ -612,12 +620,16 @@ async fn receiver_network_routing_thread_manager(
                 topic_gdp_name,
                 format!("{}-{}", request.connection_type.unwrap(), "receiver"),
                 fib_tx, 
+                ebpf_tx,
                 local_to_rtc_rx));
         });
     }
 }
 
-pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTopicRequest>) {
+pub async fn ros_service_manager(
+    ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
+    mut service_request_rx: UnboundedReceiver<ROSTopicRequest>
+) {
     let mut waiting_rib_handles = vec![];
 
     // TODO: now it's hardcoded, make it changable later
@@ -675,9 +687,11 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     waiting_rib_handles.push(topic_creator_handle);
 
     let fib_tx_clone = fib_tx.clone();
+    let enbpf_tx_clone = ebpf_tx.clone();
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
     let sender_routing_manager_handle = tokio::spawn(async move {
         sender_network_routing_thread_manager(
+            enbpf_tx_clone,
             sender_routing_rx,
             fib_tx_clone,
             channel_tx.clone()
@@ -686,9 +700,10 @@ pub async fn ros_service_manager(mut service_request_rx: UnboundedReceiver<ROSTo
     waiting_rib_handles.push(sender_routing_manager_handle);
 
     let fib_tx_clone = fib_tx.clone();
+    let enbpf_tx_clone = ebpf_tx.clone();
     let (receiver_routing_tx, receiver_routing_rx) = mpsc::unbounded_channel();
     let receiver_routing_manager_handle = tokio::spawn(async move {
-        receiver_network_routing_thread_manager(receiver_routing_rx, fib_tx_clone).await
+        receiver_network_routing_thread_manager(enbpf_tx_clone, receiver_routing_rx, fib_tx_clone).await
     });
     waiting_rib_handles.push(receiver_routing_manager_handle);
 

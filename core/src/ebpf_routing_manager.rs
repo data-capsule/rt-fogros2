@@ -10,6 +10,8 @@ use aya_log::BpfLogger;
 use futures::StreamExt;
 use log::{ info, warn };
 use redis_async::{client, resp::FromResp};
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{ db::{get_entity_from_database, get_redis_address_and_port, get_redis_url}, structs::GDPName, util::get_non_existent_ip_addr };
 use crate::structs::{GDPPacket, GdpAction, Packet};
@@ -18,6 +20,14 @@ use crate::db::{
     allow_keyspace_notification,
 };
 
+# [derive(Debug, Clone, Serialize, Deserialize)]
+
+pub struct NewEbpfTopicRequest {
+    pub name: String,
+    pub gdp_name: GDPName,
+    pub direction: String,
+    pub sock_public_addr: SocketAddr,
+}
 
 fn flip_direction(direction: &str) -> Option<String> {
     let mapping = [
@@ -42,6 +52,7 @@ pub async fn register_stream(
     topic_gdp_name: GDPName,
     direction: String, 
     sock_public_addr: SocketAddr,
+    ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
 ){
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
@@ -50,6 +61,7 @@ pub async fn register_stream(
         format!("{:?}-{:}", topic_gdp_name, direction).as_str(),
         sock_public_addr.to_string().as_str(),
     );
+    info!("registered {:?} with {:?}", topic_gdp_name, sock_public_addr);
 
     let receiver_topic = format!("{:?}-{:}", topic_gdp_name, flip_direction(direction).unwrap());
     let redis_url = get_redis_url();
@@ -57,17 +69,33 @@ pub async fn register_stream(
         &redis_url,
         &receiver_topic
     ).expect("Cannot get receiver from database");
-    info!("get a list of receivers from KVS {:?}", updated_receivers);
+    info!("get a list of {:?} from KVS {:?}", flip_direction(direction), updated_receivers);
     
+    if updated_receivers.len() != 0 {
+        let receiver_addr = updated_receivers[0].clone();
+        let receiver_socket_addr: SocketAddr = receiver_addr.parse().expect("Failed to parse receiver address");
+        let ebpf_topic_request = NewEbpfTopicRequest {
+            name: "new_topic".to_string(),
+            gdp_name: topic_gdp_name.clone(),
+            direction: direction.to_string(),
+            sock_public_addr: receiver_socket_addr,
+        };
+        ebpf_tx.send(ebpf_topic_request).unwrap();
+    }
+
+
+
+    // TODO: fix following code later, assume listener start before writer
     let redis_addr_and_port = get_redis_address_and_port();
     let pubsub_con = client
         ::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1).await
         .expect("Cannot connect to Redis");
     let redis_topic_stream_name: String = format!(
-        "__keyspace@0__:{receiver_topic}",  
+        "__keyspace@0__:{}", receiver_topic
     );
-
+    allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
     let mut msgs = pubsub_con.psubscribe(&redis_topic_stream_name).await.expect("Cannot subscribe to topic");
+    info!("subscribed to {:?}", redis_topic_stream_name);
 
     loop {
         let message = msgs.next().await;
@@ -84,6 +112,14 @@ pub async fn register_stream(
                     &receiver_topic
                 ).expect("Cannot get receiver from database");
                 info!("get a list of receivers from KVS {:?}", updated_receivers);
+
+                let ebpf_topic_request = NewEbpfTopicRequest {
+                    name: "new_topic".to_string(),
+                    gdp_name: topic_gdp_name.clone(),
+                    direction: direction.to_string(),
+                    sock_public_addr: sock_public_addr.clone(),
+                };
+                ebpf_tx.send(ebpf_topic_request).unwrap();
             }
             None => {
                 info!("No message received");
@@ -92,7 +128,9 @@ pub async fn register_stream(
     }
 }
 
-pub async fn ebpf_routing_manager() {
+pub async fn ebpf_routing_manager(
+    mut ebpf_rx: tokio::sync::mpsc::UnboundedReceiver<NewEbpfTopicRequest>,
+) {
     // This will include your eBPF object file as raw bytes at compile-time and load it at
     // runtime. This approach is recommended for most real-world use cases. If you would
     // like to specify the eBPF program at runtime rather than at compile-time, you can
@@ -118,18 +156,20 @@ pub async fn ebpf_routing_manager() {
 
     warn!("interface attached!");
     // (1)
-    let mut blocklist: HashMap<_, u32, u32> = HashMap::try_from(
+    let mut blocklist: HashMap<_, u32, u16> = HashMap::try_from(
         bpf.map_mut("BLOCKLIST").unwrap()
     ).unwrap();
 
     // (2)
     let block_addr: u32 = get_non_existent_ip_addr().into();
 
-    // (3)
-    blocklist.insert(block_addr, 0, 0);
-
     loop{
-        // sleep 
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        tokio::select! {
+            Some(topic) = ebpf_rx.recv() => {
+                info!("received {:?}", topic);
+                let port = topic.sock_public_addr.port();
+                blocklist.insert(block_addr, port, 0);
+            }
+        }
     }
 }

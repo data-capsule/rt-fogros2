@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::ebpf_routing_manager::register_stream;
+use crate::ebpf_routing_manager::{register_stream, NewEbpfTopicRequest};
 use crate::pipeline::construct_gdp_packet_with_guid;
 use crate::structs::GDPHeaderInTransit;
 use crate::structs::{generate_random_gdp_name, GDPName};
@@ -157,6 +157,7 @@ pub async fn reader_and_writer(
     topic_gdp_name: GDPName,
     direction: String, // Sender or Receiver
     ros_tx : UnboundedSender<GDPPacket>,       // send to ros
+    ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,       // send to ebpf
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
     let mut need_more_data_for_previous_header = false;
@@ -178,6 +179,7 @@ pub async fn reader_and_writer(
         topic_gdp_name,
         direction,
         sock_public_addr.unwrap(),
+        ebpf_tx
     ));
 
     loop {
@@ -301,7 +303,7 @@ pub async fn reader_and_writer(
     }
 
     futures::join!(handle);
-    
+
     // loop {
     //     let n = dc.read(&mut buf).await.unwrap();
     //     println!("Read: \"{}\"", String::from_utf8_lossy(&buf[..n]));

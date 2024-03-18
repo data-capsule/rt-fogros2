@@ -21,7 +21,7 @@ use crate::{
 
 
 #[map]
-static BLOCKLIST: HashMap<u32, u32> = HashMap::with_max_entries(1024, 0);
+static BLOCKLIST: HashMap<u32, u16> = HashMap::with_max_entries(1024, 0);
 
 #[classifier]
 pub fn tc_egress(ctx: TcContext) -> i32 {
@@ -32,8 +32,8 @@ pub fn tc_egress(ctx: TcContext) -> i32 {
 }
 
 
-fn block_ip(address: u32) -> bool {
-    unsafe { BLOCKLIST.get(&address).is_some() }
+fn block_ip(address: u32) -> Option<u16> {
+    unsafe { BLOCKLIST.get(&address).copied()}
 }
 
 fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
@@ -49,7 +49,8 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
         (*ip_hdr).dst_addr
     });
 
-    let action = if block_ip(destination) {
+    let port_val = block_ip(destination);
+    let action = if port_val.is_some() {
 
         let ifindex = 2; // Target interface index
 
@@ -62,6 +63,7 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
             // https://www.browserling.com/tools/ip-to-dec
             // (*ip_hdr).dst_addr = Ipv4Addr::new(54, 153, 114, 6).into();  //54.153.114.6
             (*ip_hdr).dst_addr = Ipv4Addr::new(1, 0, 0, 127).into(); 
+            (*udp_hdr).dest = port_val.unwrap();
             (*ip_hdr).check = 0;
         }
         let full_cksum = unsafe {
@@ -79,45 +81,36 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
             (*udp_hdr).check = 0;
         }
 
-
         let _ = &ctx.clone_redirect(ifindex, 0).map_err(
             |err| (
             )
         );
 
-        let ip_hdr_2: *mut Ipv4Hdr = unsafe { ptr_at(&ctx, EthHdr::LEN)?};
-        let udp_hdr_2: *mut UdpHdr = unsafe { ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN)?};
-        unsafe {
-            (*ip_hdr_2).dst_addr = Ipv4Addr::new(6, 114, 153, 54).into();   //54.153.114.6
-            (*ip_hdr_2).check = 0;
-        }
-        let full_cksum = unsafe {
-            bpf_csum_diff(
-                mem::MaybeUninit::zeroed().assume_init(),
-                0,
-                ip_hdr_2 as *mut u32,
-                Ipv4Hdr::LEN as u32,
-                0,
-            )
-        } as u64;
-        unsafe { (*ip_hdr_2).check = csum_fold_helper(full_cksum) };
+        // let ip_hdr_2: *mut Ipv4Hdr = unsafe { ptr_at(&ctx, EthHdr::LEN)?};
+        // let udp_hdr_2: *mut UdpHdr = unsafe { ptr_at(&ctx, EthHdr::LEN + Ipv4Hdr::LEN)?};
+        // unsafe {
+        //     (*ip_hdr_2).dst_addr = Ipv4Addr::new(6, 114, 153, 54).into();   //54.153.114.6
+        //     (*ip_hdr_2).check = 0;
+        // }
+        // let full_cksum = unsafe {
+        //     bpf_csum_diff(
+        //         mem::MaybeUninit::zeroed().assume_init(),
+        //         0,
+        //         ip_hdr_2 as *mut u32,
+        //         Ipv4Hdr::LEN as u32,
+        //         0,
+        //     )
+        // } as u64;
+        // unsafe { (*ip_hdr_2).check = csum_fold_helper(full_cksum) };
 
-        unsafe{
-            (*udp_hdr_2).check = 0;
-        }
-        let _ = &ctx.clone_redirect(ifindex, 0).map_err(
-            |err| (
-            )
-        );
-
-
+        // unsafe{
+        //     (*udp_hdr_2).check = 0;
+        // }
         // let _ = &ctx.clone_redirect(ifindex, 0).map_err(
         //     |err| (
         //     )
         // );
 
-        // change the destination and send to another host 
-        // bpf_clone_redirect(ctx.if
 
         TC_ACT_SHOT
     } else {

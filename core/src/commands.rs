@@ -19,6 +19,8 @@ async fn router_async_loop() {
 
     let (service_request_tx, service_request_rx) = mpsc::unbounded_channel();
 
+    let (ebpf_request_tx, ebpf_request_rx) = mpsc::unbounded_channel();
+
     let mut future_handles = Vec::new();
 
     let ros_topic_manager_handle = tokio::spawn(ros_topic_manager(topic_request_rx));
@@ -26,10 +28,10 @@ async fn router_async_loop() {
 
     let ros_service_manager_handle = tokio::spawn(async move {
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        ros_service_manager(service_request_rx).await;
+        ros_service_manager(ebpf_request_tx, service_request_rx).await;
     });
 
-    future_handles.push(tokio::spawn(ebpf_routing_manager()));
+    future_handles.push(tokio::spawn(ebpf_routing_manager(ebpf_request_rx)));
     future_handles.push(ros_service_manager_handle);
 
     let ros_api_server_handle = tokio::spawn(ros_api_server(topic_request_tx, service_request_tx));
