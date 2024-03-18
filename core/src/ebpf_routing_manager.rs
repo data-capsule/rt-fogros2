@@ -1,35 +1,31 @@
-
-
-
 use std::net::Ipv4Addr;
 
 use aya::{
     include_bytes_aligned,
     maps::HashMap,
-    programs::{tc, SchedClassifier, TcAttachType},
+    programs::{ tc, SchedClassifier, TcAttachType },
     Bpf,
 };
 use aya_log::BpfLogger;
-use log::{info, warn};
-use redis_async::client;
+use futures::StreamExt;
+use log::{ info, warn };
+use redis_async::{client, resp::FromResp};
 
-use crate::{db::get_redis_address_and_port, util::get_non_existent_ip_addr};
-
+use crate::{ db::{get_entity_from_database, get_redis_address_and_port, get_redis_url}, util::get_non_existent_ip_addr };
 
 pub async fn ebpf_routing_manager() {
-
     // This will include your eBPF object file as raw bytes at compile-time and load it at
     // runtime. This approach is recommended for most real-world use cases. If you would
     // like to specify the eBPF program at runtime rather than at compile-time, you can
     // reach for `Bpf::load_file` instead.
     #[cfg(debug_assertions)]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
-        "../../target/bpfel-unknown-none/debug/tc-egress"
-    )).unwrap();
+    let mut bpf = Bpf::load(
+        include_bytes_aligned!("../../target/bpfel-unknown-none/debug/tc-egress")
+    ).unwrap();
     #[cfg(not(debug_assertions))]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
-        "../../target/bpfel-unknown-none/release/tc-egress"
-    ));
+    let mut bpf = Bpf::load(
+        include_bytes_aligned!("../../target/bpfel-unknown-none/release/tc-egress")
+    );
     if let Err(e) = BpfLogger::init(&mut bpf) {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
@@ -37,15 +33,15 @@ pub async fn ebpf_routing_manager() {
     // error adding clsact to the interface if it is already added is harmless
     // the full cleanup can be done with 'sudo tc qdisc del dev eth0 clsact'.
     let _ = tc::qdisc_add_clsact("ens5");
-    let program: &mut SchedClassifier =
-        bpf.program_mut("tc_egress").unwrap().try_into().unwrap();
+    let program: &mut SchedClassifier = bpf.program_mut("tc_egress").unwrap().try_into().unwrap();
     program.load();
     program.attach("ens5", TcAttachType::Egress);
 
     warn!("interface attached!");
     // (1)
-    let mut blocklist: HashMap<_, u32, u32> =
-        HashMap::try_from(bpf.map_mut("BLOCKLIST").unwrap()).unwrap();
+    let mut blocklist: HashMap<_, u32, u32> = HashMap::try_from(
+        bpf.map_mut("BLOCKLIST").unwrap()
+    ).unwrap();
 
     // (2)
     let block_addr: u32 = get_non_existent_ip_addr().into();
@@ -53,18 +49,45 @@ pub async fn ebpf_routing_manager() {
     // (3)
     blocklist.insert(block_addr, 0, 0);
 
+    let receiver_topic = "GDPName([143, 157, 149, 87])-request-receiver";
+    let redis_url = get_redis_url();
+    let updated_receivers = get_entity_from_database(
+        &redis_url,
+        &receiver_topic
+    ).expect("Cannot get receiver from database");
+    info!("get a list of receivers from KVS {:?}", updated_receivers);
+
+
+    
     let redis_addr_and_port = get_redis_address_and_port();
-    let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-        .await
+    let pubsub_con = client
+        ::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1).await
         .expect("Cannot connect to Redis");
-    // let topic = format!("__keyspace@0__:{}", receiver_topic);
-    // let mut msgs = pubsub_con
-    //     .psubscribe(&topic)
-    //     .await
-    //     .expect("Cannot subscribe to topic");
+    let topic: String = format!(
+        "__keyspace@0__:{receiver_topic}",  
+    );
 
-    while true {
-        std::thread::sleep(std::time::Duration::from_millis(10000));
+    let mut msgs = pubsub_con.psubscribe(&topic).await.expect("Cannot subscribe to topic");
+
+    loop {
+        let message = msgs.next().await;
+        match message {
+            Some(message) => {
+                let received_operation = String::from_resp(message.unwrap()).unwrap();
+                info!("KVS {}", received_operation);
+                if received_operation != "lpush" {
+                    info!("the operation is not lpush, ignore");
+                    continue;
+                }
+                let updated_receivers = get_entity_from_database(
+                    &redis_url,
+                    &receiver_topic
+                ).expect("Cannot get receiver from database");
+                info!("get a list of receivers from KVS {:?}", updated_receivers);
+            }
+            None => {
+                info!("No message received");
+            }
+        }
     }
-
 }
