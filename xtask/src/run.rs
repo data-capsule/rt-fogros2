@@ -64,7 +64,7 @@ pub fn run(opts: Options) -> Result<(), anyhow::Error> {
         "-E",
         "bash",
         "-c",
-        "source \"/home/ubuntu/ebpf_ws/install/setup.bash\" && RUST_LOG=info target/debug/gdp-router router",
+        "source \"/home/ubuntu/ebpf_ws/install/setup.bash\" && RMW_IMPLEMENTATION=rmw_cyclonedds_cpp target/debug/gdp-router router",
     ].to_vec();
 
 

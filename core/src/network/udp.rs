@@ -4,7 +4,7 @@ use crate::pipeline::construct_gdp_packet_with_guid;
 use crate::structs::GDPHeaderInTransit;
 use crate::structs::{generate_random_gdp_name, GDPName};
 use crate::structs::{GDPPacket, GdpAction, Packet};
-use crate::util::get_signaling_server_address;
+use crate::util::{get_non_existent_ip_addr, get_signaling_server_address};
 use tokio::net::UdpSocket;
 use std::str::FromStr;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -286,10 +286,12 @@ pub async fn reader_and_writer(
                 info!("the header size is {}", header_string.len());
                 info!("the header to sent is {}", header_string);
 
+                let destination_ip = get_non_existent_ip_addr(); 
+                let destination = SocketAddr::new(std::net::IpAddr::V4(destination_ip), 8888);
                 //insert the first null byte to separate the packet header
                 header_string.push(0u8 as char);
                 let header_string_payload = header_string.as_bytes();
-                match stream.send_to(&header_string_payload[..header_string_payload.len()], "0.0.0.0:8888").await {
+                match stream.send_to(&header_string_payload[..header_string_payload.len()],destination).await {
                     Ok(_) => {},
                     Err(e) => {
                         warn!("The connection is closed: {}", e);
@@ -300,14 +302,14 @@ pub async fn reader_and_writer(
                 // stream.write_all(&packet.payload[..packet.payload.len()]).await.unwrap();
                 if let Some(payload) = pkt_to_forward.payload {
                     info!("the payload length is {}", payload.len());
-                    stream.send_to(&payload[..payload.len()], "0.0.0.0:8888").await.unwrap();
+                    stream.send_to(&payload[..payload.len()], destination).await.unwrap();
                 }
 
                 if let Some(name_record) = pkt_to_forward.name_record {
                     let name_record_string = serde_json::to_string(&name_record).unwrap();
                     let name_record_buffer = name_record_string.as_bytes();
                     info!("the name record length is {}", name_record_buffer.len());
-                    stream.send_to(&name_record_buffer[..name_record_buffer.len()], "0.0.0.0:8888").await.unwrap();
+                    stream.send_to(&name_record_buffer[..name_record_buffer.len()], destination).await.unwrap();
                 }
             }
 

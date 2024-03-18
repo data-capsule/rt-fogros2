@@ -100,12 +100,6 @@ pub async fn ros_remote_service_provider(
                 ));
 
                 if request.action != TopicManagerAction::ADD {
-                    // let channel_update_msg = FibStateChange {
-                    //     action: request.action,
-                    //     topic_gdp_name: topic_gdp_name,
-                    //     forward_destination: None,
-                    // };
-                    // let _ = channel_tx.send(channel_update_msg);
                     error!("action {:?} not supported in ros_remote_service_provider", request.action);
                     continue;
                 }
@@ -164,7 +158,7 @@ pub async fn ros_remote_service_provider(
                                             req.respond(respond_msg).expect("could not send service response");
                                         },
                                         // timeout after 1 second
-                                        _ = tokio::time::sleep(Duration::from_millis(100000)) => {
+                                        _ = tokio::time::sleep(Duration::from_millis(1000)) => {
                                             error!("timeout for ros_rx");
                                             let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             req.respond(respond_msg).expect("could not send service response");

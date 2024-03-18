@@ -67,7 +67,9 @@ class AddThreeIntsAsyncClientNode(Node):
         self.req.b = b
         self.req.c = c
         self.future = self.cli.call_async(self.req)
-        rclpy.spin_until_future_complete(self, self.future)
+        import time
+        time.sleep(1)
+        # rclpy.spin_until_future_complete(self, self.future)
         return self.future.result()
 
 
@@ -89,9 +91,16 @@ def main(args=None):
 
     while True:
         time_start = time()
-        add_three_ints_client.get_logger().info(f"I am {host_name} ond {host_ip}. Sending request {a}, {b}, {c}")
+        # add_three_ints_client.get_logger().info(f"I am {host_name} ond {host_ip}. Sending request {a}, {b}, {c}")
         response = add_three_ints_client.send_request(a,b,c)
-        if response.sum == 0:
+        if response == None:
+            add_three_ints_client.get_logger().error(
+                print(
+                    f'Result is None!',
+                )
+            )
+        
+        elif response.sum == 0:
             add_three_ints_client.get_logger().error(
                 print_string_with_color_based_on_name(
                     f'Result times out!',
@@ -115,18 +124,18 @@ def main(args=None):
         #plt.savefig("latency.png")
         
         # plot latency of different server_name with dots 
-        if response.server_name not in latency:
-            latency[response.server_name] = []
-            latency_timetsamp[response.server_name] = []
-        latency[response.server_name].append(time() - time_start)
-        latency_timetsamp[response.server_name].append(time() - beginning_time)
-        plt.clf()
-        for server_name in latency:
-            plt.plot(latency_timetsamp[server_name], latency[server_name], label=server_name, marker='o',linestyle = 'None')
-        plt.legend()
-        plt.xlabel("time (s)")
-        plt.ylabel("latency (s)")
-        plt.savefig("latency.png")
+        # if response.server_name not in latency:
+        #     latency[response.server_name] = []
+        #     latency_timetsamp[response.server_name] = []
+        # latency[response.server_name].append(time() - time_start)
+        # latency_timetsamp[response.server_name].append(time() - beginning_time)
+        # plt.clf()
+        # for server_name in latency:
+        #     plt.plot(latency_timetsamp[server_name], latency[server_name], label=server_name, marker='o',linestyle = 'None')
+        # plt.legend()
+        # plt.xlabel("time (s)")
+        # plt.ylabel("latency (s)")
+        # plt.savefig("latency.png")
 
     add_three_ints_service_node.destroy_node()
     rclpy.shutdown()

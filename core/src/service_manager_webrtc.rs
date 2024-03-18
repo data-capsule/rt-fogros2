@@ -12,13 +12,13 @@ use crate::pipeline::{
     construct_gdp_forward_from_bytes, construct_gdp_request_with_guid,
     construct_gdp_response_with_guid,
 };
-use crate::service_request_manager::{service_connection_fib_handler, FibConnectionType};
+use crate::service_request_manager_webrtc::{service_connection_fib_handler, FibConnectionType};
 use crate::structs::{
     gdp_name_to_string, generate_gdp_name_from_string, generate_random_gdp_name,
     get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet,
 };
 
-use crate::service_request_manager::{FibChangeAction, FibStateChange};
+use crate::service_request_manager_webrtc::{FibChangeAction, FibStateChange};
 
 use redis_async::client;
 use redis_async::resp::FromResp;

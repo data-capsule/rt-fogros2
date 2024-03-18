@@ -1,4 +1,10 @@
-use std::env;
+use std::{env, net::Ipv4Addr};
+
+
+// address used to filter the packets
+pub fn get_non_existent_ip_addr() -> Ipv4Addr {
+    Ipv4Addr::new(192, 168, 123, 234)
+}
 
 // read from environment variable signaling server address
 pub fn get_signaling_server_address() -> String {
