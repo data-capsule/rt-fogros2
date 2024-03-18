@@ -18,9 +18,29 @@ use crate::db::{
     allow_keyspace_notification,
 };
 
+
+fn flip_direction(direction: &str) -> Option<String> {
+    let mapping = [
+        ("request-receiver", "request-sender"),
+        ("response-sender", "response-receiver"),
+        ("request-sender", "request-receiver"),
+        ("response-receiver", "response-sender"),
+        ("pub-receiver", "sub-sender"),
+        ("sub-sender", "pub-receiver"),
+        ("pub-sender", "sub-receiver"),
+        ("sub-receiver", "pub-sender"),
+    ];
+    for (k, v) in mapping.iter() {
+        if k == &direction {
+            return Some(v.to_string());
+        }
+    }
+    None
+}
+
 pub async fn register_stream(
     topic_gdp_name: GDPName,
-    direction: String, // Sender or Receiver
+    direction: String, 
     sock_public_addr: SocketAddr,
 ){
     let direction: &str = direction.as_str();
@@ -30,15 +50,14 @@ pub async fn register_stream(
         format!("{:?}-{:}", topic_gdp_name, direction).as_str(),
         sock_public_addr.to_string().as_str(),
     );
-    let receiver_topic = "GDPName([143, 157, 149, 87])-request-receiver";
+
+    let receiver_topic = format!("{:?}-{:}", topic_gdp_name, flip_direction(direction).unwrap());
     let redis_url = get_redis_url();
     let updated_receivers = get_entity_from_database(
         &redis_url,
         &receiver_topic
     ).expect("Cannot get receiver from database");
     info!("get a list of receivers from KVS {:?}", updated_receivers);
-
-
     
     let redis_addr_and_port = get_redis_address_and_port();
     let pubsub_con = client
