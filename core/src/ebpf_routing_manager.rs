@@ -11,8 +11,9 @@ use aya::{
 };
 use aya_log::BpfLogger;
 use log::{info, warn};
+use redis_async::client;
 
-use crate::util::get_non_existent_ip_addr;
+use crate::{db::get_redis_address_and_port, util::get_non_existent_ip_addr};
 
 
 pub async fn ebpf_routing_manager() {
@@ -51,6 +52,16 @@ pub async fn ebpf_routing_manager() {
 
     // (3)
     blocklist.insert(block_addr, 0, 0);
+
+    let redis_addr_and_port = get_redis_address_and_port();
+    let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
+        .await
+        .expect("Cannot connect to Redis");
+    // let topic = format!("__keyspace@0__:{}", receiver_topic);
+    // let mut msgs = pubsub_con
+    //     .psubscribe(&topic)
+    //     .await
+    //     .expect("Cannot subscribe to topic");
 
     while true {
         std::thread::sleep(std::time::Duration::from_millis(10000));

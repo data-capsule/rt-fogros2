@@ -566,7 +566,7 @@ async fn sender_network_routing_thread_manager(
             let _rtc_handle = tokio::spawn(
                 reader_and_writer(
                     topic_gdp_name,
-                    format!("{}-{}", "receiver", request.connection_type.unwrap()),
+                    format!("{}-{}", request.connection_type.unwrap(), "sender"),
                     fib_tx,
                     local_to_rtc_rx,
                 )
@@ -610,7 +610,7 @@ async fn receiver_network_routing_thread_manager(
             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
             let _rtc_handle = tokio::spawn(reader_and_writer(
                 topic_gdp_name,
-                format!("{}-{}", "sender", request.connection_type.unwrap()),
+                format!("{}-{}", request.connection_type.unwrap(), "receiver"),
                 fib_tx, 
                 local_to_rtc_rx));
         });

@@ -60,7 +60,8 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
         unsafe {
             // address of 127.0.0.1
             // https://www.browserling.com/tools/ip-to-dec
-            (*ip_hdr).dst_addr = Ipv4Addr::new(54, 153, 114, 6).into();  //54.153.114.6
+            // (*ip_hdr).dst_addr = Ipv4Addr::new(54, 153, 114, 6).into();  //54.153.114.6
+            (*ip_hdr).dst_addr = Ipv4Addr::new(1, 0, 0, 127).into(); 
             (*ip_hdr).check = 0;
         }
         let full_cksum = unsafe {

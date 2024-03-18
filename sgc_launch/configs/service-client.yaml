@@ -17,10 +17,8 @@ state_machine:
 assignment:
   machine_client: client
   machine_server: server
-  machine_switch: standby
 
 topology:
   machine_client:
     children: 
       - machine_server
-      - machine_switch
