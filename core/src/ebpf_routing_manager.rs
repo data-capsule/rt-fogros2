@@ -147,12 +147,14 @@ pub async fn ebpf_routing_manager(
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
     }
+
+    let interface = "ens5";
     // error adding clsact to the interface if it is already added is harmless
     // the full cleanup can be done with 'sudo tc qdisc del dev eth0 clsact'.
-    let _ = tc::qdisc_add_clsact("ens5");
+    let _ = tc::qdisc_add_clsact(interface);
     let program: &mut SchedClassifier = bpf.program_mut("tc_egress").unwrap().try_into().unwrap();
     program.load();
-    program.attach("ens5", TcAttachType::Egress);
+    program.attach(interface, TcAttachType::Egress);
 
     warn!("interface attached!");
     // (1)

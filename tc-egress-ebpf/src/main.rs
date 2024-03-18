@@ -1,6 +1,6 @@
 #![no_std]
 #![no_main]
-
+#![feature(ip_bits)]
 use aya_ebpf::{
     bindings::{TC_ACT_OK, TC_ACT_PIPE, TC_ACT_SHOT}, helpers::{bpf_clone_redirect, bpf_csum_diff}, macros::{classifier, map}, maps::HashMap, programs::TcContext
 };
@@ -12,6 +12,7 @@ use network_types::{
     tcp::TcpHdr,
     udp::{self, UdpHdr},
 };
+
 use core::{mem, net::Ipv4Addr};
 mod utils;
 
@@ -62,8 +63,8 @@ fn try_tc_egress(ctx: TcContext) -> Result<i32, i64> {
             // address of 127.0.0.1
             // https://www.browserling.com/tools/ip-to-dec
             // (*ip_hdr).dst_addr = Ipv4Addr::new(54, 153, 114, 6).into();  //54.153.114.6
-            (*ip_hdr).dst_addr = Ipv4Addr::new(1, 0, 0, 127).into(); 
-            (*udp_hdr).dest = port_val.unwrap();
+            (*ip_hdr).dst_addr = u32::from_le_bytes(Ipv4Addr::new(127, 0, 0, 1).octets()); //Ipv4Addr::new(127, 0, 0, 1).into(); 
+            (*udp_hdr).dest = port_val.unwrap().to_be();
             (*ip_hdr).check = 0;
         }
         let full_cksum = unsafe {
