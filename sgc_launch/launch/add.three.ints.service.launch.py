@@ -28,7 +28,7 @@ def generate_launch_description():
         parameters = [
             # find and add config file in ./sgc_launhc/configs
             # or use the `config_path` optional parameter
-            {"config_file_name": "service-client-topics.yaml"}, 
+            {"config_file_name": "service-client.yaml"}, 
             {"whoami": "machine_server"},
             {"release_mode": False}
         ]

@@ -7,11 +7,11 @@ def generate_launch_description():
     """Talker example that launches everything locally."""
     ld = LaunchDescription()
 
-    talker_node = Node(
-        package="bench", executable="listener",
-    )
+    # talker_node = Node(
+    #     package="bench", executable="listener",
+    # )
 
-    ld.add_action(talker_node)
+    # ld.add_action(talker_node)
     
     client_node = Node(
         package="bench", executable="add_three_ints_client",
@@ -27,7 +27,7 @@ def generate_launch_description():
         parameters = [
             # find and add config file in ./sgc_launhc/configs
             # or use the `config_path` optional parameter
-            {"config_file_name": "service-client-topics.yaml"}, 
+            {"config_file_name": "service-client.yaml"}, 
             {"whoami": "machine_client"},
             {"release_mode": False}
         ]
