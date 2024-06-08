@@ -40,6 +40,7 @@ from bench_msgs.srv import AddThreeInts
 import hashlib 
 from matplotlib import pyplot as plt
 from time import time 
+import numpy as np
 
 def print_string_with_color_based_on_name(string, name):
     
@@ -86,6 +87,8 @@ def main(args=None):
     latency = dict()
     latency_timetsamp = dict()
     beginning_time = time()
+    overall_latency = []
+
 
     while True:
         time_start = time()
@@ -112,6 +115,8 @@ def main(args=None):
                     response.server_name
                 )
             )
+        overall_latency.append(time() - time_start)
+        print_string_with_color_based_on_name(f"mean latency: {sum(overall_latency)/len(overall_latency)}, stddev: {np.std(overall_latency)}", response.server_name)
         
         a += 1
         b += 1

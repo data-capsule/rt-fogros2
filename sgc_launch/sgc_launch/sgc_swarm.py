@@ -3,6 +3,7 @@ import yaml
 import pprint
 import random
 
+
 class Node:
     def __init__(self, address, parent=None):
         self.address = address

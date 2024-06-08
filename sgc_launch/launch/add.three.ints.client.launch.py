@@ -6,7 +6,13 @@ from launch_ros.actions import Node
 def generate_launch_description():
     """Talker example that launches everything locally."""
     ld = LaunchDescription()
-    
+
+    # talker_node = Node(
+    #     package="bench", executable="listener",
+    # )
+
+    # ld.add_action(talker_node)
+
     client_node = Node(
         package="bench", executable="add_three_ints_client",
     )
