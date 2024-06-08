@@ -133,7 +133,7 @@ pub async fn ros_remote_service_provider(
 
                     existing_topics.push(topic_gdp_name);
                     let mut service = manager_node.lock().unwrap()
-                    .create_service_untyped(&topic_name, &topic_type)
+                    .create_service_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
                     .expect("topic subscribing failure");
 
                     let ros_handle = tokio::spawn (async move {
@@ -267,7 +267,7 @@ pub async fn ros_local_service_caller(
                 } else {
                     existing_topics.push(topic_gdp_name);
                     let untyped_client = manager_node.lock().unwrap()
-                    .create_client_untyped(&topic_name, &topic_type)
+                    .create_client_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
                     .expect("topic publisher create failure");
 
                     // receive from the rtc_rx and call the local service
