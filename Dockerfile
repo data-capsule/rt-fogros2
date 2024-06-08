@@ -9,6 +9,7 @@ WORKDIR /fog_ws
 # changed to .
 COPY . /fog_ws/rt-fogros2
 RUN . /opt/ros/humble/setup.sh && colcon build 
+# --symlink-install
 
 # docker build -t dev-fr . 
-# docker run -ti --net=host -v .:/fog_ws/rt-fogros2  dev-fr bash  
+# docker run -ti --net=host -v ~/rt-fogros2:/fog_ws/rt-fogros2  dev-fr bash  

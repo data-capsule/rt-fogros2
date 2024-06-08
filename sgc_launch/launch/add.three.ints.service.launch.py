@@ -8,11 +8,11 @@ def generate_launch_description():
     ld = LaunchDescription()
 
 
-    listener_node = Node(
-        package="bench", executable="talker", output="screen"
-    )
+    # listener_node = Node(
+    #     package="bench", executable="talker", output="screen"
+    # )
 
-    ld.add_action(listener_node)
+    # ld.add_action(listener_node)
 
     service_node = Node(
         package="bench", executable="add_three_ints_service",
