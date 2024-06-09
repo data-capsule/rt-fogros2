@@ -17,8 +17,6 @@ members = [
     "cli",
     "core",
     "signaling",
-    "tc-egress-common", 
-    "xtask"
 ]
 
 [features]
