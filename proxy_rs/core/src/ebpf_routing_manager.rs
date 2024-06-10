@@ -13,8 +13,8 @@ use redis_async::{client, resp::FromResp};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{ db::{get_entity_from_database, get_redis_address_and_port, get_redis_url}, structs::GDPName, util::get_non_existent_ip_addr };
-use crate::structs::{GDPPacket, GdpAction, Packet};
+use crate::{ db::{get_entity_from_database, get_redis_address_and_port, get_redis_url}, util::get_non_existent_ip_addr };
+use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet, GDPName};
 use crate::db::{
     add_entity_to_database_as_transaction,
     allow_keyspace_notification,

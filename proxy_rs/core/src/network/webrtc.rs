@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::pipeline::construct_gdp_packet_with_guid;
-use crate::structs::GDPHeaderInTransit;
-use crate::structs::{generate_random_gdp_name, GDPName};
-use crate::structs::{GDPPacket, GdpAction, Packet};
+use fogrs_common::packet_structs::GDPHeaderInTransit;
+use fogrs_common::packet_structs::{generate_random_gdp_name, GDPName};
+use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet};
 use crate::util::get_signaling_server_address;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};

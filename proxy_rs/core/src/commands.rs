@@ -3,7 +3,7 @@ extern crate tokio_core;
 
 // use crate::ebpf_routing_manager::ebpf_routing_manager;
 use crate::{api_server::ros_api_server, util::get_non_existent_ip_addr};
-use crate::topic_manager::ros_topic_manager;
+// use crate::_manager::ros_topic_manager;
 use futures::future;
 
 use tokio::sync::mpsc;
@@ -50,8 +50,8 @@ async fn webrtc_router_async_loop() {
 
     let mut future_handles = Vec::new();
 
-    let ros_topic_manager_handle = tokio::spawn(ros_topic_manager(topic_request_rx));
-    future_handles.push(ros_topic_manager_handle);
+    // let ros_topic_manager_handle = tokio::spawn(ros_topic_manager(topic_request_rx));
+    // future_handles.push(ros_topic_manager_handle);
 
     let ros_service_manager_handle = tokio::spawn(async move {
         std::thread::sleep(std::time::Duration::from_millis(1000));

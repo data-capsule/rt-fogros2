@@ -22,7 +22,7 @@ tokio = { version = "1.22", features = ["full"] }
 tokio-core = "0.1"
 # r2r = {path = "/home/gdpmobile8/r2r/r2r"}
 # r2r = {git = "https://github.com/KeplerC/r2r.git", rev = "85f6ab046"}
-
+sha2 = "0.10.6"
 clap = { version = "4.1", features = ["derive"] }
 bytes = "1"
 env_logger = "0.11.3"

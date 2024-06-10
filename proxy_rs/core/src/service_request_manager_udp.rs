@@ -1,5 +1,5 @@
 use crate::logger::{handle_logs, Logger};
-use crate::structs::{GDPName, GDPPacket, GdpAction};
+use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
 use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

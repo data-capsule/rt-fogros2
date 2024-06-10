@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use log::info;
 use rand::Rng;
 use std::fmt;
 use strum_macros::EnumIter;
@@ -79,7 +80,7 @@ pub fn generate_random_gdp_name() -> GDPName {
     ])
 }
 
-pub(crate) trait Packet {
+pub trait Packet {
     /// get protobuf object of the packet
     /// get serialized byte array of the packet
     fn get_byte_payload(&self) -> Option<&Vec<u8>>;

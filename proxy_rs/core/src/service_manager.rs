@@ -11,13 +11,13 @@ use crate::pipeline::{
     construct_gdp_forward_from_bytes, construct_gdp_request_with_guid,
     construct_gdp_response_with_guid,
 };
-use crate::service_request_manager_webrtc::{service_connection_fib_handler, FibConnectionType};
-use crate::structs::{
+use crate::service_request_manager_webrtc::{service_connection_fib_handler};
+use fogrs_common::packet_structs::{
     gdp_name_to_string, generate_gdp_name_from_string, generate_random_gdp_name,
     get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet,
 };
-
-use crate::service_request_manager_webrtc::{FibChangeAction, FibStateChange};
+use fogrs_common::fib_structs::RoutingManagerRequest;
+use fogrs_common::fib_structs::{FibChangeAction, FibStateChange, FibConnectionType};
 
 use redis_async::client;
 use redis_async::resp::FromResp;
@@ -150,7 +150,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
         channel_tx.clone(),
     );
     
-    let _service_provider_handle = tokio::spawn(ros_manager.handle_service_provider(service_request_rx, fib_tx.clone(), channel_tx.clone()));
+    // let _service_provider_handle = tokio::spawn(ros_manager.handle_service_provider(service_request_rx, fib_tx.clone(), channel_tx.clone()));
 
     // let _service_provider_handle = tokio::spawn(ROSManager::handle_service_provider(service_request_rx, fib_tx.clone(), channel_tx.clone()));
 
@@ -160,11 +160,11 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
 
     // Similarly, spawn other necessary tasks for `ros_local_service_caller`, `ros_topic_remote_publisher`, etc.
 
-    let (_sender_routing_handle, sender_routing_rx) = mpsc::unbounded_channel();
-    tokio::spawn(routing_manager.handle_sender_routing(sender_routing_rx));
+    // let (_sender_routing_handle, sender_routing_rx) = mpsc::unbounded_channel();
+    // tokio::spawn(routing_manager.handle_sender_routing(sender_routing_rx));
 
-    let (_receiver_routing_handle, receiver_routing_rx) = mpsc::unbounded_channel();
-    tokio::spawn(routing_manager.handle_receiver_routing(receiver_routing_rx));
+    // let (_receiver_routing_handle, receiver_routing_rx) = mpsc::unbounded_channel();
+    // tokio::spawn(routing_manager.handle_receiver_routing(receiver_routing_rx));
 
     // Continuously monitor service requests and handle them accordingly.
     loop {

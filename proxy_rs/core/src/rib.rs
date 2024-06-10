@@ -1,7 +1,7 @@
 extern crate multimap;
 use multimap::MultiMap;
 
-use crate::structs::{GDPName, GDPNameRecord, GDPNameRecordType::*, GDPStatus};
+use fogrs_common::packet_structs::{GDPName, GDPNameRecord, GDPNameRecordType::*, GDPStatus};
 
 // an interface to rib
 // will support queries

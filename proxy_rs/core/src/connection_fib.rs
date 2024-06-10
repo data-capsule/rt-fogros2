@@ -1,4 +1,4 @@
-use crate::structs::{GDPName, GDPPacket};
+use fogrs_common::packet_structs::{GDPName, GDPPacket};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
