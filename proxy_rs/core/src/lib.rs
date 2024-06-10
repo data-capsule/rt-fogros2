@@ -16,9 +16,10 @@ pub mod pipeline;
 // util
 pub mod commands;
 pub mod logger;
-pub mod service_manager_udp;
+// pub mod service_manager_udp;
 pub mod service_request_manager_udp;
-pub mod service_manager_webrtc;
+// pub mod service_manager_webrtc;
+pub mod service_manager;
 pub mod service_request_manager_webrtc;
 pub mod topic_manager;
 pub mod ebpf_routing_manager;

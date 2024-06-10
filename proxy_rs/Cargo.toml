@@ -17,6 +17,7 @@ members = [
     "cli",
     "core",
     "signaling",
+    "fogrs-ros",
 ]
 
 [features]

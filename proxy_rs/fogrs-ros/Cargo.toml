@@ -1,12 +1,11 @@
 [package]
-name = "core"
+name = "fogrs-ros"
 version = "0.0.1-beta"
 authors = ["Eric Chen <kych@berkeley.edu>", "Jiachen Yuan <jcyuan_johnson@berkeley.edu>"]
 description = "The application core code"
 edition = "2021"
 
 [features]
-default = ["ros"]
 ros = []
 
 [dependencies]
