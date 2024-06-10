@@ -157,7 +157,7 @@ pub async fn reader_and_writer(
     topic_gdp_name: GDPName,
     direction: String, // Sender or Receiver
     ros_tx : UnboundedSender<GDPPacket>,       // send to ros
-    ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,       // send to ebpf
+    // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,       // send to ebpf
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
     let mut need_more_data_for_previous_header = false;
@@ -179,7 +179,7 @@ pub async fn reader_and_writer(
         topic_gdp_name,
         direction,
         sock_public_addr.unwrap(),
-        ebpf_tx
+        // ebpf_tx
     ));
 
     loop {

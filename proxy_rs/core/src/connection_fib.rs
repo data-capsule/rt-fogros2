@@ -3,22 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum FibChangeAction {
-    ADD,
-    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
-    PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME,   // resume a paused topic
-    DELETE,   // deleting a local topic interface and all its connections
-    RESPONSE,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum TopicStateInFIB {
-    RUNNING,
-    PAUSED,
-    DELETED,
-}
 
 #[derive(Debug)]
 pub struct FibStateChange {

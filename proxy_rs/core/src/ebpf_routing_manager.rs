@@ -52,7 +52,7 @@ pub async fn register_stream(
     topic_gdp_name: GDPName,
     direction: String, 
     sock_public_addr: SocketAddr,
-    ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
+    // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
 ){
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
@@ -80,7 +80,7 @@ pub async fn register_stream(
             direction: direction.to_string(),
             sock_public_addr: receiver_socket_addr,
         };
-        ebpf_tx.send(ebpf_topic_request).unwrap();
+        // ebpf_tx.send(ebpf_topic_request).unwrap();
     }
 
 
@@ -119,7 +119,7 @@ pub async fn register_stream(
                     direction: direction.to_string(),
                     sock_public_addr: sock_public_addr.clone(),
                 };
-                ebpf_tx.send(ebpf_topic_request).unwrap();
+                // ebpf_tx.send(ebpf_topic_request).unwrap();
             }
             None => {
                 info!("No message received");
