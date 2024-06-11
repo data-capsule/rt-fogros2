@@ -12,10 +12,10 @@ pub enum TopicManagerAction {
 }
 
 pub struct TopicManagerRequest {
-    action: TopicManagerAction,
-    topic_name: String,
-    topic_type: String,
-    certificate: Vec<u8>,
+    pub action: TopicManagerAction,
+    pub topic_name: String,
+    pub topic_type: String,
+    pub certificate: Vec<u8>,
 }
 
 // Define your necessary structures and enums (e.g., GDPPacket, FibStateChange, etc.)
