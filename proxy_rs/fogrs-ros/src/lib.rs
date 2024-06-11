@@ -1,7 +1,7 @@
-use fogrs_common::fib_structs::{TopicManagerRequest};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use fogrs_common::packet_structs::{GDPPacket};
 use fogrs_common::fib_structs::{FibStateChange};
+
 pub struct ROSManager {
     // node: Arc<Mutex<r2r::Node>>,
     // unique_ros_node_gdp_name: GDPName,
@@ -25,12 +25,12 @@ impl ROSManager {
         }
     }
     
-    pub async fn handle_service_provider(
-        &self,
-        mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-        fib_tx: UnboundedSender<GDPPacket>,
-        channel_tx: UnboundedSender<FibStateChange>,
-    ) {}
+    // pub async fn handle_service_provider(
+    //     &self,
+    //     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+    //     fib_tx: UnboundedSender<GDPPacket>,
+    //     channel_tx: UnboundedSender<FibStateChange>,
+    // ) {}
 }
 
 

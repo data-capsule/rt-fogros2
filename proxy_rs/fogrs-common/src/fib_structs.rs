@@ -1,22 +1,8 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use crate::packet_structs::{GDPName, GDPPacket};
 use tokio::sync::mpsc::UnboundedSender;
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum TopicManagerAction {
-    ADD,
-    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
-    PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME,   // resume a paused topic
-    DELETE,   // deleting a local topic interface and all its connections
-    RESPONSE,
-}
-
-pub struct TopicManagerRequest {
-    pub action: TopicManagerAction,
-    pub topic_name: String,
-    pub topic_type: String,
-    pub certificate: Vec<u8>,
-}
 
 // Define your necessary structures and enums (e.g., GDPPacket, FibStateChange, etc.)
 
