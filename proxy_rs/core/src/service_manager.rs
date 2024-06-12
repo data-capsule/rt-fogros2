@@ -16,7 +16,7 @@ use fogrs_common::packet_structs::{
     gdp_name_to_string, generate_gdp_name_from_string, generate_random_gdp_name,
     get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet,
 };
-use fogrs_common::fib_structs::{RoutingManagerRequest, TopicManagerRequest};
+use fogrs_common::fib_structs::{RoutingManagerRequest};
 use fogrs_common::fib_structs::{FibChangeAction, FibStateChange, FibConnectionType};
 
 use redis_async::client;
@@ -57,6 +57,7 @@ pub struct TopicManagerRequest {
     pub certificate: Vec<u8>,
 }
 
+#[derive(Debug, Clone)]
 struct RoutingManager {
     // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
     fib_tx: UnboundedSender<GDPPacket>,
@@ -151,16 +152,92 @@ impl RoutingManager {
         }
     }
 
+
+    pub async fn handle_sender_routing(
+        &self, mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
+    ) {
+        let connection_type = FibConnectionType::SENDER;
+        while let Some(request) = request_rx.recv().await {
+            let fib_tx = self.fib_tx.clone();
+            let channel_tx = self.channel_tx.clone();
+            // let ebpf_tx = self.ebpf_tx.clone();
+            tokio::spawn(async move {
+                let topic_name = request.topic_name.clone();
+                let topic_type = request.topic_type.clone();
+                let certificate = request.certificate.clone();
+                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                    &topic_name,
+                    &topic_type,
+                    &certificate,
+                ));
+
+                warn!(
+                    "sender_network_routing_thread_manager {:?}",
+                    connection_type
+                );
+
+                let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                let _rtc_handle = tokio::spawn(reader_and_writer(
+                    topic_gdp_name,
+                    format!("{:?}-{}", connection_type, "sender"),
+                    fib_tx,
+                    // ebpf_tx,
+                    local_to_rtc_rx,
+                ));
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::ADD,
+                    topic_gdp_name: topic_gdp_name,
+                    connection_type: connection_type,
+                    forward_destination: Some(local_to_rtc_tx),
+                    description: Some(format!(
+                        "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
+                        topic_name, topic_type, connection_type
+                    )),
+                };
+                let _ = channel_tx.send(channel_update_msg);
+                info!("remote sender sent channel update message");
+            });
+        }
+    }
+
+    pub async fn handle_receiver_routing(
+        &self, mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
+    ) {
+        let connection_type = FibConnectionType::RECEIVER;
+        while let Some(request) = request_rx.recv().await {
+            let fib_tx = self.fib_tx.clone();
+            // let ebpf_tx = self.ebpf_tx.clone();
+            tokio::spawn(async move {
+                let topic_name = request.topic_name.clone();
+                let topic_type = request.topic_type.clone();
+                let certificate = request.certificate.clone();
+                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                    &topic_name,
+                    &topic_type,
+                    &certificate,
+                ));
+                let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                let _rtc_handle = tokio::spawn(reader_and_writer(
+                    topic_gdp_name,
+                    format!("{:?}-{}", connection_type, "receiver"),
+                    fib_tx,
+                    // ebpf_tx,
+                    local_to_rtc_rx,
+                ));
+            });
+        }
+    }
+
     pub async fn handle_client_routing(
         &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
     ) {
-        panic!("client routing not implemented yet!");
+        warn!("client routing not implemented yet!");
     }
 
     pub async fn handle_service_routing(
         &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
     ) {
-        panic!("service routing not implemented yet!");
+        warn!("service routing not implemented yet!");
     }
 
 }
@@ -205,17 +282,42 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
 
     // let (_sender_routing_handle, sender_routing_rx) = mpsc::unbounded_channel();
     // tokio::spawn(routing_manager.handle_sender_routing(sender_routing_rx));
+    let routing_manager_clone = routing_manager.clone();
     let (client_operation_tx, client_operation_rx) = mpsc::unbounded_channel();
-    tokio::spawn(routing_manager.handle_client_routing(client_operation_rx));
+    tokio::spawn(async move {
+        routing_manager_clone.handle_client_routing(client_operation_rx).await;
+    });
 
     let (service_operation_tx, service_operation_rx) = mpsc::unbounded_channel();
-    tokio::spawn(routing_manager.handle_service_routing(service_operation_rx));
+    let routing_manager_clone = routing_manager.clone();
+    tokio::spawn(async move {
+        routing_manager_clone.handle_service_routing(service_operation_rx).await;
+    });
 
     let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
-    tokio::spawn(routing_manager.handle_publisher_routing(publisher_operation_rx));
+    let routing_manager_clone = routing_manager.clone();
+    tokio::spawn(async move {
+        routing_manager_clone.handle_publisher_routing(publisher_operation_rx).await;
+    });
 
     let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
-    tokio::spawn(routing_manager.handle_subscriber_routing(subscriber_operation_rx));
+    let routing_manager_clone = routing_manager.clone();
+    tokio::spawn(async move {
+        routing_manager_clone.handle_subscriber_routing(subscriber_operation_rx).await;
+    });
+
+    let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
+    let routing_manager_clone = routing_manager.clone();
+    tokio::spawn(async move {
+        routing_manager_clone.handle_sender_routing(sender_routing_rx).await;
+    });
+
+    let (receiver_routing_tx, receiver_routing_rx) = mpsc::unbounded_channel();
+    let routing_manager_clone = routing_manager.clone();
+    tokio::spawn(async move {
+        routing_manager_clone.handle_receiver_routing(receiver_routing_rx).await;
+    });
+
 
     // let (_receiver_routing_handle, receiver_routing_rx) = mpsc::unbounded_channel();
     // tokio::spawn(routing_manager.handle_receiver_routing(receiver_routing_rx));
@@ -295,7 +397,65 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                         };
                     },
                     "routing" => {
-                        panic!("routing not implemented yet!");
+                        info!("routing operation {:?}", payload);
+
+                        let topic_name = payload.topic_name;
+                        let topic_type = payload.topic_type;
+                        let action = payload.ros_op;
+
+                        match action.as_str() {
+
+                            // source: fib -> webrtc
+                            "source" => {
+                                sender_routing_tx.send(RoutingManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    topic_name: topic_name,
+                                    topic_type: topic_type,
+                                    certificate: certificate.clone(),
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                    communication_url: Some(payload.forward_sender_url.unwrap()),
+                                }).expect("sender routing tx failure");
+                            }
+
+                            // destination: webrtc -> fib
+                            "destination" => {
+                                receiver_routing_tx.send(RoutingManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    topic_name: topic_name,
+                                    topic_type: topic_type,
+                                    certificate: certificate.clone(),
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                    communication_url: Some(payload.forward_receiver_url.unwrap()),
+                                }).expect("receiver routing tx failure");
+                            }
+
+                            "pub" => {
+                                sender_routing_tx.send(RoutingManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    topic_name: topic_name,
+                                    topic_type: topic_type,
+                                    certificate: certificate.clone(),
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                    communication_url: Some(payload.forward_sender_url.unwrap()),
+                                }).expect("sender routing tx failure");
+                            }
+
+                            // destination: webrtc -> fib
+                            "sub" => {
+                                receiver_routing_tx.send(RoutingManagerRequest {
+                                    action: FibChangeAction::ADD,
+                                    topic_name: topic_name,
+                                    topic_type: topic_type,
+                                    certificate: certificate.clone(),
+                                    connection_type: Some(payload.connection_type.unwrap()),
+                                    communication_url: Some(payload.forward_receiver_url.unwrap()),
+                                }).expect("receiver routing tx failure");
+                            }
+
+                            _ => {
+                                warn!("unknown action {}", action);
+                            }
+                        }
                     }
 
                     _ => {
@@ -305,4 +465,5 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
             },
         }
     }
+
 }
