@@ -266,3 +266,115 @@ pub fn string_to_gdp_name(name: &str) -> GDPName {
     }
     GDPName(bytes)
 }
+
+
+/// construct gdp struct from bytes
+/// bytes is put as payload
+pub fn construct_gdp_forward_from_bytes(
+    destination: GDPName, source: GDPName, buffer: Vec<u8>,
+) -> GDPPacket {
+    GDPPacket {
+        action: GdpAction::Forward,
+        gdpname: destination,
+        payload: Some(buffer),
+        source: source,
+        guid: None,
+        name_record: None,
+    }
+}
+
+pub fn construct_gdp_request_with_guid(
+    destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
+) -> GDPPacket {
+    GDPPacket {
+        action: GdpAction::Request,
+        gdpname: destination,
+        payload: Some(buffer),
+        source: source,
+        guid: Some(guid),
+        name_record: None,
+    }
+}
+
+pub fn construct_gdp_response_with_guid(
+    destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
+) -> GDPPacket {
+    GDPPacket {
+        action: GdpAction::Response,
+        gdpname: destination,
+        payload: Some(buffer),
+        source: source,
+        guid: Some(guid),
+        name_record: None,
+    }
+}
+
+pub fn construct_gdp_packet_with_guid(
+    action: GdpAction, destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
+) -> GDPPacket {
+    GDPPacket {
+        action: action,
+        gdpname: destination,
+        payload: Some(buffer),
+        source: source,
+        guid: Some(guid),
+        name_record: None,
+    }
+}
+
+/// construct gdp struct from bytes
+/// bytes is put as payload
+pub fn construct_gdp_advertisement_from_structs(
+    destination: GDPName, source: GDPName, name_record: GDPNameRecord,
+) -> GDPPacket {
+    GDPPacket {
+        action: GdpAction::Advertise,
+        gdpname: destination,
+        source,
+        payload: None,
+        guid: None,
+        name_record: Some(name_record),
+    }
+}
+
+pub fn construct_gdp_advertisement_from_bytes(
+    destination: GDPName, source: GDPName, advertisement_packet: Vec<u8>,
+) -> GDPPacket {
+    if advertisement_packet.len() == 0 {
+        return GDPPacket {
+            action: GdpAction::Advertise,
+            gdpname: destination,
+            source: source,
+            payload: None,
+            guid: None,
+            name_record: None,
+        };
+    }
+    GDPPacket {
+        action: GdpAction::Advertise,
+        gdpname: destination,
+        source: source,
+        payload: None,
+        name_record: Some(
+            serde_json::from_str::<GDPNameRecord>(
+                std::str::from_utf8(&advertisement_packet).unwrap(),
+            )
+            .unwrap(),
+        ),
+        guid: None,
+    }
+}
+
+/// construct rib query from bytes
+pub fn construct_rib_query_from_bytes(
+    destination: GDPName, source: GDPName, name_record: GDPNameRecord,
+) -> GDPPacket {
+    GDPPacket {
+        action: GdpAction::RibGet,
+        gdpname: destination,
+        source: source,
+        payload: None,
+        guid: None,
+        name_record: Some(name_record),
+    }
+}

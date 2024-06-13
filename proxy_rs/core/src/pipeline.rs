@@ -16,21 +16,6 @@ pub fn construct_gdp_forward_from_bytes(
     }
 }
 
-/// construct gdp struct from bytes
-/// bytes is put as payload
-// pub fn construct_gdp_forward_with_guid(
-//     destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
-// ) -> GDPPacket {
-//     GDPPacket {
-//         action: GdpAction::Forward,
-//         gdpname: destination,
-//         payload: Some(buffer),
-//         source: source,
-//         guid: Some(guid),
-//         name_record: None,
-//     }
-// }
-
 pub fn construct_gdp_request_with_guid(
     destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
 ) -> GDPPacket {

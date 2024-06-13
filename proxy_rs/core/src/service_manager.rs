@@ -18,24 +18,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it
 use tokio::sync::mpsc::{self};
 
 
-use fogrs_ros::ROSManager;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum TopicManagerAction {
-    ADD,
-    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
-    PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME,   // resume a paused topic
-    DELETE,   // deleting a local topic interface and all its connections
-    RESPONSE,
-}
-
-pub struct TopicManagerRequest {
-    pub action: TopicManagerAction,
-    pub topic_name: String,
-    pub topic_type: String,
-    pub certificate: Vec<u8>,
-}
+use fogrs_ros::{ROSManager, TopicManagerAction, TopicManagerRequest};
 
 #[derive(Debug, Clone)]
 struct RoutingManager {
@@ -274,17 +257,29 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     });
 
     // TODO: this will be created under ROS
-    // let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
-    // let routing_manager_clone = routing_manager.clone();
-    // tokio::spawn(async move {
-    //     routing_manager_clone.handle_sender_routing(publisher_operation_rx).await;
-    // });
+    let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
+    let ros_manager_clone = ros_manager.clone();
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
+    tokio::spawn(async move {
+        ros_manager_clone.handle_ros_topic_remote_publisher(
+            publisher_operation_rx,
+            fib_tx_clone,
+            channel_tx_clone,
+        ).await;
+    });
 
-    // let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
-    // let routing_manager_clone = routing_manager.clone();
-    // tokio::spawn(async move {
-    //     routing_manager_clone.handle_receiver_routing(subscriber_operation_rx).await;
-    // });
+    let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
+    let ros_manager_clone = ros_manager.clone();
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
+    tokio::spawn(async move {
+        ros_manager_clone.handle_ros_topic_remote_subscriber(
+            subscriber_operation_rx,
+            fib_tx_clone,
+            channel_tx_clone,
+        ).await;
+    });
 
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
     let routing_manager_clone = routing_manager.clone();
@@ -359,7 +354,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     topic_type: topic_type,
                                     certificate: certificate,
                                 };
-                                // let _ = publisher_operation_tx.send(topic_creator_request);
+                                let _ = publisher_operation_tx.send(topic_creator_request);
                             }
 
                             // provide service remotely and interact with local service, and send back
@@ -373,7 +368,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     topic_type: topic_type,
                                     certificate: certificate,
                                 };
-                                // let _ = subscriber_operation_tx.send(topic_creator_request);
+                                let _ = subscriber_operation_tx.send(topic_creator_request);
                             },
                             _ => {
                                 warn!("unknown action {}", action);
