@@ -46,10 +46,14 @@ fn flip_direction(direction: &str) -> Option<String> {
 }
 
 
+// protocol: 
+// key: <topic_name>-sender, value: [a list of sender gdp names]
+// key: <topic_name>-receiver, value: [a list of receiver gdp names]
 pub async fn register_stream_sender(
     topic_gdp_name: GDPName,
     direction: String,
     fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>,
 ) {
     let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
     let sock_public_addr = get_socket_stun(&stream).await.unwrap();
@@ -105,9 +109,20 @@ pub async fn register_stream_sender(
                     )
                 }
             );
+            // send to fib an update 
+            let channel_update_msg = FibStateChange {
+                action: FibChangeAction::ADD,
+                topic_gdp_name: topic_gdp_name,
+                connection_type: FibConnectionType::SENDER,
+                forward_destination: Some(local_to_rtc_tx),
+                description: Some(format!(
+                    "udp stream for topic_name {:?}",
+                    topic_gdp_name,
+                )),
+            };
+            let _ = channel_tx.send(channel_update_msg);
         }
     }
-
 
     // TODO: fix following code later, assume listener start before writer
     let redis_addr_and_port = get_redis_address_and_port();
@@ -147,7 +162,6 @@ pub async fn register_stream_sender(
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName,
     direction: String,
-    sock_public_addr: SocketAddr,
 ) {
     let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
     let sock_public_addr = get_socket_stun(&stream).await.unwrap();
@@ -165,13 +179,13 @@ pub async fn register_stream_receiver(
         topic_gdp_name, sock_public_addr
     );
 
-    let receiver_topic = format!(
+    let sender_topic = format!(
         "{:?}-{:}",
         topic_gdp_name,
         flip_direction(direction).unwrap()
     );
     let redis_url = get_redis_url();
-    let updated_receivers = get_entity_from_database(&redis_url, &receiver_topic)
+    let updated_receivers = get_entity_from_database(&redis_url, &sender_topic)
         .expect("Cannot get receiver from database");
     info!(
         "get a list of {:?} from KVS {:?}",
@@ -266,14 +280,17 @@ impl RoutingManager {
                 );
 
                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                let channel_tx_clone = channel_tx.clone();
                 let _rtc_handle = tokio::spawn(
                     async move {
                         let direction = format!("{:?}-{}", connection_type, "sender");
 
-                        let handle = tokio::spawn(register_stream_sender(
+                        register_stream_sender(
                             topic_gdp_name,
-                            direction
-                        ));
+                            direction,
+                            fib_tx.clone(),
+                            channel_tx_clone,
+                        );
                     }
                 );
 
