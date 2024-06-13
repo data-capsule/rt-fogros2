@@ -1,7 +1,6 @@
 use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
 use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use crate::network::udp::{get_socket_stun, reader_and_writer};
-use crate::service_request_manager_udp::service_connection_fib_handler;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
 use fogrs_common::packet_structs::{
@@ -14,12 +13,10 @@ use redis_async::resp::FromResp;
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 
-use serde::{Deserialize, Serialize};
 
 use core::panic;
 use std::str;
-use std::{env, process, vec};
-use tokio::select;
+use std::{vec};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it out
                                                              // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};

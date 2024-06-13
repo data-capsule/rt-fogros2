@@ -1,23 +1,17 @@
 use crate::api_server::ROSTopicRequest;
 
 
-use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
-use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use crate::routing_manager::RoutingManager;
 use crate::service_request_manager_udp::service_connection_fib_handler;
 use fogrs_common::fib_structs::RoutingManagerRequest;
-use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
-use fogrs_common::packet_structs::{get_gdp_name_from_topic, GDPName, GDPPacket};
-use redis_async::resp::FromResp;
-use std::net::SocketAddr;
+use fogrs_common::fib_structs::{FibChangeAction};
+use fogrs_common::packet_structs::{get_gdp_name_from_topic, GDPName};
 
-use serde::{Deserialize, Serialize};
 
 use core::panic;
 use std::env;
-use std::str;
 use tokio::select;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it out
+use tokio::sync::mpsc::{UnboundedReceiver}; // TODO: replace it out
                                                              // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
 

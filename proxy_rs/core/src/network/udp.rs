@@ -1,6 +1,5 @@
 use crate::pipeline::construct_gdp_packet_with_guid;
 use crate::util::get_non_existent_ip_addr;
-use async_tungstenite::stream;
 use fogrs_common::packet_structs::GDPHeaderInTransit;
 use fogrs_common::packet_structs::GDPName;
 use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet};
@@ -21,7 +20,6 @@ use std::net::SocketAddr;
 use futures::StreamExt;
 
 use redis_async::{client, resp::FromResp};
-use serde::{Deserialize, Serialize};
 
 use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
 use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};

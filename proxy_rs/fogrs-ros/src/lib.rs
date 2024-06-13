@@ -2,7 +2,7 @@ use fogrs_common::packet_structs::Packet;
 use fogrs_common::{
     fib_structs::{FibChangeAction, FibConnectionType, FibStateChange},
     packet_structs::{
-        construct_gdp_forward_from_bytes, generate_gdp_name_from_string, generate_random_gdp_name,
+        construct_gdp_forward_from_bytes, generate_random_gdp_name,
         get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction,
     },
 };

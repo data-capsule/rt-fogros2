@@ -4,13 +4,12 @@ use fogrs_common::fib_structs::{
     FIBState, FibChangeAction, FibConnection, FibConnectionType, FibStateChange, TopicStateInFIB,
 };
 use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
 // for write_all()
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver};
 
 /// receive, check, and route GDP messages
 ///

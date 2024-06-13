@@ -7,13 +7,8 @@ use std::net::SocketAddr;
 //     Bpf,
 // };
 // use aya_log::BpfLogger;
-use futures::StreamExt;
-use log::info;
-use redis_async::{client, resp::FromResp};
 use serde::{Deserialize, Serialize};
 
-use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
-use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use fogrs_common::packet_structs::GDPName;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
