@@ -51,7 +51,7 @@ impl ROSManager {
     }
 
 
-    // local ROS topic(provider) -> webrtc (publish remotely)
+    // local ROS topic(provider) -> fib
     pub async fn handle_ros_topic_remote_publisher(
         self,
         mut status_recv: UnboundedReceiver<TopicManagerRequest>,
@@ -136,9 +136,10 @@ impl ROSManager {
                 }
             }
         }
+        // tokio::join!(join_handles);
     }
 
-    // webrtc -> ros topic locally
+    // fib -> ros topic locally
     pub async fn handle_ros_topic_remote_subscriber(
         self,
         mut status_recv: UnboundedReceiver<TopicManagerRequest>,
@@ -244,6 +245,7 @@ impl ROSManager {
                 }
             }
         }
+        // tokio::join!(join_handles);
     }
 
     // pub async fn handle_service_provider(
