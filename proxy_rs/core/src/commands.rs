@@ -2,7 +2,7 @@ extern crate tokio;
 extern crate tokio_core;
 
 // use crate::ebpf_routing_manager::ebpf_routing_manager;
-use crate::{api_server::ros_api_server, util::get_non_existent_ip_addr};
+use crate::{api_server::ros_api_server};
 // use crate::_manager::ros_topic_manager;
 use futures::future;
 

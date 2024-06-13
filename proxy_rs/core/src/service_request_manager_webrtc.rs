@@ -1,15 +1,12 @@
 use crate::logger::{handle_logs, Logger};
 use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
 use chrono;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
-use tokio::fs::File;
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt; // for write_all()
+ // for write_all()
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver};
 use fogrs_common::fib_structs::{FibStateChange, FibChangeAction, FibConnectionType, TopicStateInFIB, FibConnection};
 use fogrs_common::fib_structs::FIBState;
 

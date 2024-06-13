@@ -1,42 +1,24 @@
 use crate::api_server::ROSTopicRequest;
 
-use crate::db::{
-    add_entity_to_database_as_transaction, allow_keyspace_notification, get_entity_from_database,
-    get_redis_address_and_port, get_redis_url,
-};
-#[cfg(feature = "ros")]
-use crate::network::webrtc::{register_webrtc_stream, webrtc_reader_and_writer};
 
-use crate::pipeline::{
-    construct_gdp_forward_from_bytes, construct_gdp_request_with_guid,
-    construct_gdp_response_with_guid,
-};
 use crate::service_request_manager_webrtc::{service_connection_fib_handler};
 use fogrs_common::packet_structs::{
-    gdp_name_to_string, generate_gdp_name_from_string, generate_random_gdp_name,
-    get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction, Packet,
+    get_gdp_name_from_topic, GDPName, GDPPacket,
 };
 use fogrs_common::fib_structs::{RoutingManagerRequest};
 use fogrs_common::fib_structs::{FibChangeAction, FibStateChange, FibConnectionType};
 
-use redis_async::client;
-use redis_async::resp::FromResp;
 use serde::{Deserialize, Serialize};
 
-use crate::ebpf_routing_manager::NewEbpfTopicRequest;
 use crate::network::udp::reader_and_writer;
-use futures::StreamExt;
 use core::panic;
 use std::env;
-use std::net::{Ipv4Addr, SocketAddr};
 use std::str;
-use std::sync::{Arc, Mutex};
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it out
 // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
 
-use tokio::time::Duration;
 
 use fogrs_ros::ROSManager;
 
@@ -229,13 +211,13 @@ impl RoutingManager {
     }
 
     pub async fn handle_client_routing(
-        &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
+        &self, request_rx: UnboundedReceiver<TopicManagerRequest>,
     ) {
         warn!("client routing not implemented yet!");
     }
 
     pub async fn handle_service_routing(
-        &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
+        &self, request_rx: UnboundedReceiver<TopicManagerRequest>,
     ) {
         warn!("service routing not implemented yet!");
     }

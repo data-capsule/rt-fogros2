@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedSender};
 
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
