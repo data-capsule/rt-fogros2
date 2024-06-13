@@ -15,8 +15,8 @@ const UDP_BUFFER_SIZE: usize = 65535;
 
 use librice::stun::attribute::*;
 use librice::stun::message::*;
-use std::net::SocketAddr;
 use log::info;
+use std::net::SocketAddr;
 
 use futures::StreamExt;
 
@@ -53,7 +53,6 @@ pub async fn register_stream(
     direction: String,
     sock_public_addr: SocketAddr,
     // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
-
 ) {
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
@@ -115,8 +114,6 @@ pub async fn register_stream(
                 let updated_receivers = get_entity_from_database(&redis_url, &receiver_topic)
                     .expect("Cannot get receiver from database");
                 info!("get a list of receivers from KVS {:?}", updated_receivers);
-
-
             }
             None => {
                 info!("No message received");
@@ -272,7 +269,6 @@ pub async fn reader_and_writer(
     };
     let mut remaining_gdp_payload: Vec<u8> = vec![];
     let mut reset_counter = 0; // TODO: a temporary counter to reset the connection
-
 
 
     loop {

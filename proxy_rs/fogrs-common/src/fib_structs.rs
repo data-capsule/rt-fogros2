@@ -69,7 +69,6 @@ pub struct RoutingManagerRequest {
 // }
 
 
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
     ADD,

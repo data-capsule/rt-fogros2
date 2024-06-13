@@ -1,14 +1,14 @@
 use crate::api_server::ROSTopicRequest;
 
 
+use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
+use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use crate::routing_manager::RoutingManager;
 use crate::service_request_manager_udp::service_connection_fib_handler;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
 use fogrs_common::packet_structs::{get_gdp_name_from_topic, GDPName, GDPPacket};
 use redis_async::resp::FromResp;
-use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
-use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use std::net::SocketAddr;
 
 use serde::{Deserialize, Serialize};
@@ -87,11 +87,13 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     let fib_tx_clone = fib_tx.clone();
     let channel_tx_clone = channel_tx.clone();
     tokio::spawn(async move {
-        ros_manager_clone.handle_ros_topic_remote_publisher(
-            publisher_operation_rx,
-            fib_tx_clone,
-            channel_tx_clone,
-        ).await;
+        ros_manager_clone
+            .handle_ros_topic_remote_publisher(
+                publisher_operation_rx,
+                fib_tx_clone,
+                channel_tx_clone,
+            )
+            .await;
     });
 
     let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
@@ -99,11 +101,13 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     let fib_tx_clone = fib_tx.clone();
     let channel_tx_clone = channel_tx.clone();
     tokio::spawn(async move {
-        ros_manager_clone.handle_ros_topic_remote_subscriber(
-            subscriber_operation_rx,
-            fib_tx_clone,
-            channel_tx_clone,
-        ).await;
+        ros_manager_clone
+            .handle_ros_topic_remote_subscriber(
+                subscriber_operation_rx,
+                fib_tx_clone,
+                channel_tx_clone,
+            )
+            .await;
     });
 
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();

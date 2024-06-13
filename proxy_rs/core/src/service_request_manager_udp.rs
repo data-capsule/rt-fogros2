@@ -1,6 +1,8 @@
 use crate::logger::{handle_logs, Logger};
 use chrono;
-use fogrs_common::fib_structs::{FIBState, FibChangeAction, FibConnection, FibConnectionType, FibStateChange, TopicStateInFIB};
+use fogrs_common::fib_structs::{
+    FIBState, FibChangeAction, FibConnection, FibConnectionType, FibStateChange, TopicStateInFIB,
+};
 use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

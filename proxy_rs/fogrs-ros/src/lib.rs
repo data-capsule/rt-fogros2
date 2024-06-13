@@ -1,13 +1,21 @@
-
-
-use fogrs_common::{fib_structs::{FibChangeAction, FibConnectionType, FibStateChange}, packet_structs::{construct_gdp_forward_from_bytes, generate_gdp_name_from_string, generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction}};
+use fogrs_common::packet_structs::Packet;
+use fogrs_common::{
+    fib_structs::{FibChangeAction, FibConnectionType, FibStateChange},
+    packet_structs::{
+        construct_gdp_forward_from_bytes, generate_gdp_name_from_string, generate_random_gdp_name,
+        get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction,
+    },
+};
 use futures::StreamExt;
 use log::{error, info};
 use r2r::Node;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::{mpsc::{self, UnboundedReceiver, UnboundedSender}}, task, time::Duration};
-use std::sync::{ Arc, Mutex };
-use fogrs_common::packet_structs::Packet;
+use std::sync::{Arc, Mutex};
+use tokio::{
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    task,
+    time::Duration,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum TopicManagerAction {
@@ -35,13 +43,18 @@ pub struct ROSManager {
 impl ROSManager {
     pub fn new(node_name: &str, namespace: &str) -> Self {
         let ctx = r2r::Context::create().expect("context creation failure");
-        let node = Arc::new(Mutex::new(Node::create(ctx, node_name, namespace).expect("node creation failure")));
+        let node = Arc::new(Mutex::new(
+            Node::create(ctx, node_name, namespace).expect("node creation failure"),
+        ));
         let unique_ros_node_gdp_name = generate_random_gdp_name();
 
         let ros_manager_node_clone = node.clone();
         task::spawn_blocking(move || loop {
             std::thread::sleep(Duration::from_millis(100));
-            ros_manager_node_clone.lock().unwrap().spin_once(Duration::from_millis(10));
+            ros_manager_node_clone
+                .lock()
+                .unwrap()
+                .spin_once(Duration::from_millis(10));
         });
 
         Self {
@@ -50,26 +63,21 @@ impl ROSManager {
         }
     }
 
-
     // local ROS topic(provider) -> fib
     pub async fn handle_ros_topic_remote_publisher(
-        self,
-        mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-        fib_tx: UnboundedSender<GDPPacket>,
-        channel_tx: UnboundedSender<FibStateChange>
+        self, mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+        fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
     ) {
         let mut join_handles = vec![];
 
         let ros_manager_node_clone = self.node.clone();
-        let _handle = tokio::task::spawn_blocking(move || {
-            loop {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                ros_manager_node_clone
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .spin_once(std::time::Duration::from_millis(10));
-            }
+        let _handle = tokio::task::spawn_blocking(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            ros_manager_node_clone
+                .clone()
+                .lock()
+                .unwrap()
+                .spin_once(std::time::Duration::from_millis(10));
         });
 
         let mut existing_topics = vec![];
@@ -141,25 +149,21 @@ impl ROSManager {
 
     // fib -> ros topic locally
     pub async fn handle_ros_topic_remote_subscriber(
-        self,
-        mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-        fib_tx: UnboundedSender<GDPPacket>,
-        channel_tx: UnboundedSender<FibStateChange>
+        self, mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+        fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
     ) {
         info!("ros_topic_remote_subscriber_handler has started");
         let mut join_handles = vec![];
 
 
         let ros_manager_node_clone = self.node.clone();
-        let _handle = tokio::task::spawn_blocking(move || {
-            loop {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                ros_manager_node_clone
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .spin_once(std::time::Duration::from_millis(10));
-            }
+        let _handle = tokio::task::spawn_blocking(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            ros_manager_node_clone
+                .clone()
+                .lock()
+                .unwrap()
+                .spin_once(std::time::Duration::from_millis(10));
         });
 
         let mut existing_topics = vec![];
@@ -330,5 +334,4 @@ impl ROSManager {
     //         }
     //     }
     // }
-
 }
