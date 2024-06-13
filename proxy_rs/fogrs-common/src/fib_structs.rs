@@ -1,6 +1,5 @@
-
-use serde::{Deserialize, Serialize};
 use crate::packet_structs::{GDPName, GDPPacket};
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
 
 // Define your necessary structures and enums (e.g., GDPPacket, FibStateChange, etc.)
@@ -19,7 +18,6 @@ pub struct RoutingManagerRequest {
     pub connection_type: Option<String>,
     pub communication_url: Option<String>,
 }
-
 
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]

@@ -1,12 +1,10 @@
 use crate::api_server::ROSTopicRequest;
 
 
-use crate::service_request_manager_webrtc::{service_connection_fib_handler};
-use fogrs_common::packet_structs::{
-    get_gdp_name_from_topic, GDPName, GDPPacket,
-};
-use fogrs_common::fib_structs::{RoutingManagerRequest};
-use fogrs_common::fib_structs::{FibChangeAction, FibStateChange, FibConnectionType};
+use crate::service_request_manager_webrtc::service_connection_fib_handler;
+use fogrs_common::fib_structs::RoutingManagerRequest;
+use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
+use fogrs_common::packet_structs::{get_gdp_name_from_topic, GDPName, GDPPacket};
 
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +14,7 @@ use std::env;
 use std::str;
 use tokio::select;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it out
-// use fogrs_common::fib_structs::TopicManagerAction;
+                                                             // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
 
 
@@ -210,18 +208,13 @@ impl RoutingManager {
         }
     }
 
-    pub async fn handle_client_routing(
-        &self, request_rx: UnboundedReceiver<TopicManagerRequest>,
-    ) {
+    pub async fn handle_client_routing(&self, request_rx: UnboundedReceiver<TopicManagerRequest>) {
         warn!("client routing not implemented yet!");
     }
 
-    pub async fn handle_service_routing(
-        &self, request_rx: UnboundedReceiver<TopicManagerRequest>,
-    ) {
+    pub async fn handle_service_routing(&self, request_rx: UnboundedReceiver<TopicManagerRequest>) {
         warn!("service routing not implemented yet!");
     }
-
 }
 
 fn read_certificate() -> Vec<u8> {
@@ -249,7 +242,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
         fib_tx.clone(),
         channel_tx.clone(),
     );
-    
+
     let certificate = read_certificate();
 
     // let _service_provider_handle = tokio::spawn(ros_manager.handle_service_provider(service_request_rx, fib_tx.clone(), channel_tx.clone()));
@@ -267,13 +260,17 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     let routing_manager_clone = routing_manager.clone();
     let (client_operation_tx, client_operation_rx) = mpsc::unbounded_channel();
     tokio::spawn(async move {
-        routing_manager_clone.handle_client_routing(client_operation_rx).await;
+        routing_manager_clone
+            .handle_client_routing(client_operation_rx)
+            .await;
     });
 
     let (service_operation_tx, service_operation_rx) = mpsc::unbounded_channel();
     let routing_manager_clone = routing_manager.clone();
     tokio::spawn(async move {
-        routing_manager_clone.handle_service_routing(service_operation_rx).await;
+        routing_manager_clone
+            .handle_service_routing(service_operation_rx)
+            .await;
     });
 
     // TODO: this will be created under ROS
@@ -292,13 +289,17 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
     let routing_manager_clone = routing_manager.clone();
     tokio::spawn(async move {
-        routing_manager_clone.handle_sender_routing(sender_routing_rx).await;
+        routing_manager_clone
+            .handle_sender_routing(sender_routing_rx)
+            .await;
     });
 
     let (receiver_routing_tx, receiver_routing_rx) = mpsc::unbounded_channel();
     let routing_manager_clone = routing_manager.clone();
     tokio::spawn(async move {
-        routing_manager_clone.handle_receiver_routing(receiver_routing_rx).await;
+        routing_manager_clone
+            .handle_receiver_routing(receiver_routing_rx)
+            .await;
     });
 
 
@@ -448,5 +449,4 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
             },
         }
     }
-
 }

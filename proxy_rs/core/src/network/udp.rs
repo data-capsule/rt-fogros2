@@ -1,19 +1,18 @@
-
-use crate::ebpf_routing_manager::{register_stream};
+use crate::ebpf_routing_manager::register_stream;
 use crate::pipeline::construct_gdp_packet_with_guid;
+use crate::util::get_non_existent_ip_addr;
 use fogrs_common::packet_structs::GDPHeaderInTransit;
-use fogrs_common::packet_structs::{GDPName};
+use fogrs_common::packet_structs::GDPName;
 use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet};
-use crate::util::{get_non_existent_ip_addr};
-use tokio::net::UdpSocket;
 use std::str::FromStr;
+use tokio::net::UdpSocket;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 const UDP_BUFFER_SIZE: usize = 1748000; // 17kb
 
-use tracing::info;
-use std::net::{SocketAddr};
 use librice::stun::attribute::*;
 use librice::stun::message::*;
+use std::net::SocketAddr;
+use tracing::info;
 
 
 // use utils::app_config::AppConfig;
@@ -81,11 +80,9 @@ pub fn parse_header_payload_pairs(
 
 
 fn parse_response(response: Message) -> Result<SocketAddr, std::io::Error> {
-    if Message::check_attribute_types(
-        &response,
-        &[XOR_MAPPED_ADDRESS, FINGERPRINT],
-        &[XOR_MAPPED_ADDRESS],
-    )
+    if Message::check_attribute_types(&response, &[XOR_MAPPED_ADDRESS, FINGERPRINT], &[
+        XOR_MAPPED_ADDRESS,
+    ])
     .is_some()
     {
         return Err(std::io::Error::new(
@@ -117,8 +114,9 @@ fn parse_response(response: Message) -> Result<SocketAddr, std::io::Error> {
 }
 
 
-async fn udp_ice_get(socket: &UdpSocket, out: Message, to: SocketAddr) -> Result<SocketAddr, std::io::Error> {
-
+async fn udp_ice_get(
+    socket: &UdpSocket, out: Message, to: SocketAddr,
+) -> Result<SocketAddr, std::io::Error> {
     info!("generated to {}", out);
     let buf = out.to_bytes();
     trace!("generated to {:?}", buf);
@@ -140,7 +138,7 @@ async fn udp_ice_get(socket: &UdpSocket, out: Message, to: SocketAddr) -> Result
 }
 
 
-pub async fn get_socket_stun(socket: &UdpSocket)  -> Result<SocketAddr, std::io::Error>{
+pub async fn get_socket_stun(socket: &UdpSocket) -> Result<SocketAddr, std::io::Error> {
     let ice_server = SocketAddr::from_str("3.18.194.127:3478").unwrap();
     let mut msg = Message::new_request(BINDING);
     msg.add_fingerprint().unwrap();
@@ -151,8 +149,8 @@ pub async fn get_socket_stun(socket: &UdpSocket)  -> Result<SocketAddr, std::io:
 #[allow(unused_assignments)]
 pub async fn reader_and_writer(
     topic_gdp_name: GDPName,
-    direction: String, // Sender or Receiver
-    ros_tx : UnboundedSender<GDPPacket>,       // send to ros
+    direction: String,                  // Sender or Receiver
+    ros_tx: UnboundedSender<GDPPacket>, // send to ros
     // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,       // send to ebpf
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
@@ -264,7 +262,7 @@ pub async fn reader_and_writer(
                 info!("the header size is {}", header_string.len());
                 info!("the header to sent is {}", header_string);
 
-                let destination_ip = get_non_existent_ip_addr(); 
+                let destination_ip = get_non_existent_ip_addr();
                 let destination = SocketAddr::new(std::net::IpAddr::V4(destination_ip), 8888);
                 //insert the first null byte to separate the packet header
                 header_string.push(0u8 as char);

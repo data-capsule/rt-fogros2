@@ -1,10 +1,9 @@
-#[macro_use]
-extern crate log;
+#[macro_use] extern crate log;
 
 // sub crates and primitives
+pub mod api_server;
 pub mod crypto;
 pub mod network;
-pub mod api_server;
 pub mod rib;
 
 // network processing

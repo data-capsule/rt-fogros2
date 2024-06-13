@@ -1,14 +1,16 @@
 use crate::logger::{handle_logs, Logger};
-use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
 use chrono;
+use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
- // for write_all()
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver};
-use fogrs_common::fib_structs::{FibStateChange, FibChangeAction, FibConnectionType, TopicStateInFIB, FibConnection};
+// for write_all()
 use fogrs_common::fib_structs::FIBState;
+use fogrs_common::fib_structs::{
+    FibChangeAction, FibConnection, FibConnectionType, FibStateChange, TopicStateInFIB,
+};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 /// receive, check, and route GDP messages
 ///

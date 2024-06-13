@@ -1,4 +1,4 @@
-use std::net::{SocketAddr};
+use std::net::SocketAddr;
 
 // use aya::{
 //     include_bytes_aligned,
@@ -8,18 +8,15 @@ use std::net::{SocketAddr};
 // };
 // use aya_log::BpfLogger;
 use futures::StreamExt;
-use log::{ info };
+use log::info;
 use redis_async::{client, resp::FromResp};
 use serde::{Deserialize, Serialize};
 
-use crate::{ db::{get_entity_from_database, get_redis_address_and_port, get_redis_url} };
-use fogrs_common::packet_structs::{GDPName};
-use crate::db::{
-    add_entity_to_database_as_transaction,
-    allow_keyspace_notification,
-};
+use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
+use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
+use fogrs_common::packet_structs::GDPName;
 
-# [derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 
 pub struct NewEbpfTopicRequest {
     pub name: String,
@@ -52,10 +49,10 @@ fn flip_direction(direction: &str) -> Option<String> {
 
 pub async fn register_stream(
     topic_gdp_name: GDPName,
-    direction: String, 
+    direction: String,
     sock_public_addr: SocketAddr,
     // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
-){
+) {
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
     let _ = add_entity_to_database_as_transaction(
@@ -63,19 +60,30 @@ pub async fn register_stream(
         format!("{:?}-{:}", topic_gdp_name, direction).as_str(),
         sock_public_addr.to_string().as_str(),
     );
-    info!("registered {:?} with {:?}", topic_gdp_name, sock_public_addr);
+    info!(
+        "registered {:?} with {:?}",
+        topic_gdp_name, sock_public_addr
+    );
 
-    let receiver_topic = format!("{:?}-{:}", topic_gdp_name, flip_direction(direction).unwrap());
+    let receiver_topic = format!(
+        "{:?}-{:}",
+        topic_gdp_name,
+        flip_direction(direction).unwrap()
+    );
     let redis_url = get_redis_url();
-    let updated_receivers = get_entity_from_database(
-        &redis_url,
-        &receiver_topic
-    ).expect("Cannot get receiver from database");
-    info!("get a list of {:?} from KVS {:?}", flip_direction(direction), updated_receivers);
-    
+    let updated_receivers = get_entity_from_database(&redis_url, &receiver_topic)
+        .expect("Cannot get receiver from database");
+    info!(
+        "get a list of {:?} from KVS {:?}",
+        flip_direction(direction),
+        updated_receivers
+    );
+
     if updated_receivers.len() != 0 {
         let receiver_addr = updated_receivers[0].clone();
-        let receiver_socket_addr: SocketAddr = receiver_addr.parse().expect("Failed to parse receiver address");
+        let receiver_socket_addr: SocketAddr = receiver_addr
+            .parse()
+            .expect("Failed to parse receiver address");
         let ebpf_topic_request = NewEbpfTopicRequest {
             name: "new_topic".to_string(),
             gdp_name: topic_gdp_name.clone(),
@@ -86,17 +94,17 @@ pub async fn register_stream(
     }
 
 
-
     // TODO: fix following code later, assume listener start before writer
     let redis_addr_and_port = get_redis_address_and_port();
-    let pubsub_con = client
-        ::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1).await
+    let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
+        .await
         .expect("Cannot connect to Redis");
-    let redis_topic_stream_name: String = format!(
-        "__keyspace@0__:{}", receiver_topic
-    );
+    let redis_topic_stream_name: String = format!("__keyspace@0__:{}", receiver_topic);
     allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
-    let mut msgs = pubsub_con.psubscribe(&redis_topic_stream_name).await.expect("Cannot subscribe to topic");
+    let mut msgs = pubsub_con
+        .psubscribe(&redis_topic_stream_name)
+        .await
+        .expect("Cannot subscribe to topic");
     info!("subscribed to {:?}", redis_topic_stream_name);
 
     loop {
@@ -109,10 +117,8 @@ pub async fn register_stream(
                     info!("the operation is not lpush, ignore");
                     continue;
                 }
-                let updated_receivers = get_entity_from_database(
-                    &redis_url,
-                    &receiver_topic
-                ).expect("Cannot get receiver from database");
+                let updated_receivers = get_entity_from_database(&redis_url, &receiver_topic)
+                    .expect("Cannot get receiver from database");
                 info!("get a list of receivers from KVS {:?}", updated_receivers);
 
                 let ebpf_topic_request = NewEbpfTopicRequest {

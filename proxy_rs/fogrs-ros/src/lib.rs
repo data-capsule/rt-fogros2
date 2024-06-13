@@ -1,11 +1,10 @@
-
 pub struct ROSManager {
     // node: Arc<Mutex<r2r::Node>>,
     // unique_ros_node_gdp_name: GDPName,
 }
 
 impl ROSManager {
-    pub fn new (node_name: &str, namespace: &str) -> Self {
+    pub fn new(node_name: &str, namespace: &str) -> Self {
         // let ctx = r2r::Context::create().expect("context creation failure");
         // let node = Arc::new(Mutex::new(Node::create(ctx, node_name, namespace).expect("node creation failure")));
         // let unique_ros_node_gdp_name = generate_random_gdp_name();
@@ -21,7 +20,7 @@ impl ROSManager {
             // unique_ros_node_gdp_name,
         }
     }
-    
+
     // pub async fn handle_service_provider(
     //     &self,
     //     mut status_recv: UnboundedReceiver<TopicManagerRequest>,
@@ -139,4 +138,3 @@ impl ROSManager {
 
 //     // Similarly implement the other methods for `ros_local_service_caller`, `ros_topic_remote_publisher`, `ros_topic_remote_subscriber`
 // }
-
