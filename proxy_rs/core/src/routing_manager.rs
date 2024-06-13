@@ -3,7 +3,7 @@ use crate::network::udp::{get_socket_stun, reader_and_writer};
 use crate::service_request_manager_udp::service_connection_fib_handler;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
-use fogrs_common::packet_structs::{get_gdp_name_from_topic, GDPName, GDPPacket};
+use fogrs_common::packet_structs::{generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GDPPacket};
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
 use redis_async::client;
@@ -47,95 +47,53 @@ fn flip_direction(direction: &str) -> Option<String> {
 
 
 // protocol: 
-// key: <topic_name>-sender, value: [a list of sender gdp names]
-// key: <topic_name>-receiver, value: [a list of receiver gdp names]
+// requirement, receiver connection needs to be created before sender
+// key: {<topic_name>-sender}, value: [a list of sender gdp names]
+// key: {<topic_name>-receiver}, value: [a list of [sender-receiver] gdp names]
+// key: {[sender-receiver]}, value: IP address of receiver
+// receiver: watch for {<topic_name>-sender}, if there is a new sender, 
+//          1. put value {IP_address} to key {[sender-receiver]} 
+//          2. append value [sender_gdp_name, receiver_gdp_name] to {<topic_name>-receiver}
+// sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
+
 pub async fn register_stream_sender(
     topic_gdp_name: GDPName,
     direction: String,
     fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
 ) {
-    let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-    let sock_public_addr = get_socket_stun(&stream).await.unwrap();
-    info!("UDP socket is bound to {:?}", sock_public_addr); //TODO: does it matter??
-
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
-    let _ = add_entity_to_database_as_transaction(
-        &redis_url,
-        format!("{:?}-{:}", topic_gdp_name, direction).as_str(),
-        sock_public_addr.to_string().as_str(),
-    );
-    info!(
-        "registered {:?} with {:?}",
-        topic_gdp_name, sock_public_addr
-    );
+    let sender_key_name = format!("{:?}-{:}", topic_gdp_name, &direction);
+    let receiver_key_name = format!("{:?}-{:}", topic_gdp_name, flip_direction(&direction).unwrap());
+    let sender_thread_gdp_name = generate_random_gdp_name();
+    let sender_thread_gdp_name_str = format!("{:?}", sender_thread_gdp_name);
 
-    let receiver_topic = format!(
-        "{:?}-{:}",
-        topic_gdp_name,
-        flip_direction(direction).unwrap()
-    );
-    let redis_url = get_redis_url();
-    let updated_receivers = get_entity_from_database(&redis_url, &receiver_topic)
-        .expect("Cannot get receiver from database");
-    info!(
-        "get a list of {:?} from KVS {:?}",
-        flip_direction(direction),
-        updated_receivers
-    );
-
-    if updated_receivers.len() != 0 {
-        // let receiver_addr = updated_receivers[0].clone();
-        // let receiver_socket_addr: SocketAddr = receiver_addr
-        //     .parse()
-        //     .expect("Failed to parse receiver address");
-        for receiver_addr in updated_receivers {
-            let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-            let receiver_socket_addr: SocketAddr = receiver_addr
-                .parse()
-                .expect("Failed to parse receiver address");
-            let _ = stream.connect(receiver_socket_addr).await;
-            info!("connected to {:?}", receiver_socket_addr);
-            let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-            let fib_clone = fib_tx.clone();
-            tokio::spawn(
-                async move {
-                    reader_and_writer (
-                        stream,
-                        fib_clone,
-                        // ebpf_tx,
-                        local_to_rtc_rx,
-                    )
-                }
-            );
-            // send to fib an update 
-            let channel_update_msg = FibStateChange {
-                action: FibChangeAction::ADD,
-                topic_gdp_name: topic_gdp_name,
-                connection_type: FibConnectionType::SENDER,
-                forward_destination: Some(local_to_rtc_tx),
-                description: Some(format!(
-                    "udp stream for topic_name {:?}",
-                    topic_gdp_name,
-                )),
-            };
-            let _ = channel_tx.send(channel_update_msg);
-        }
-    }
-
-    // TODO: fix following code later, assume listener start before writer
     let redis_addr_and_port = get_redis_address_and_port();
     let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
         .await
         .expect("Cannot connect to Redis");
-    let redis_topic_stream_name: String = format!("__keyspace@0__:{}", receiver_topic);
+    let redis_topic_stream_name: String = format!("__keyspace@0__:{}", receiver_key_name);
     allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
     let mut msgs = pubsub_con
         .psubscribe(&redis_topic_stream_name)
         .await
         .expect("Cannot subscribe to topic");
     info!("subscribed to {:?}", redis_topic_stream_name);
+
+    
+    let _ = add_entity_to_database_as_transaction(
+        &redis_url,
+        format!("{:?}-{:}", topic_gdp_name, direction).as_str(),
+        sender_thread_gdp_name_str.as_str(),
+    );
+
+    info!(
+        "registered {:?} with {:?}",
+        topic_gdp_name, sender_thread_gdp_name
+    );
+
+    let processed_receivers = [];
 
     loop {
         let message = msgs.next().await;
@@ -147,9 +105,51 @@ pub async fn register_stream_sender(
                     info!("the operation is not lpush, ignore");
                     continue;
                 }
-                let updated_receivers = get_entity_from_database(&redis_url, &receiver_topic)
+                let updated_receivers = get_entity_from_database(&redis_url, &receiver_key_name)
                     .expect("Cannot get receiver from database");
                 info!("get a list of receivers from KVS {:?}", updated_receivers);
+                let new_receivers = updated_receivers
+                        .iter()
+                        .filter(|&r| !processed_receivers.contains(r))
+                        .collect::<Vec<_>>();
+                    
+                for receiver_addr in new_receivers {
+                    // check if value starts with sender_thread_gdp_name_str
+                    if !receiver_addr.starts_with(&sender_thread_gdp_name_str) {
+                        info!("receiver_addr {:?}, not starting with {}", receiver_addr, sender_thread_gdp_name_str);
+                    }
+
+                    let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+                    let receiver_socket_addr: SocketAddr = receiver_addr
+                        .parse()
+                        .expect("Failed to parse receiver address");
+                    let _ = stream.connect(receiver_socket_addr).await;
+                    info!("connected to {:?}", receiver_socket_addr);
+                    let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                    let fib_clone = fib_tx.clone();
+                    tokio::spawn(
+                        async move {
+                            reader_and_writer (
+                                stream,
+                                fib_clone,
+                                // ebpf_tx,
+                                local_to_rtc_rx,
+                            )
+                        }
+                    );
+                    // send to fib an update 
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::ADD,
+                        topic_gdp_name: topic_gdp_name,
+                        connection_type: FibConnectionType::SENDER,
+                        forward_destination: Some(local_to_rtc_tx),
+                        description: Some(format!(
+                            "udp stream for topic_name {:?}",
+                            topic_gdp_name,
+                        )),
+                    };
+                    let _ = channel_tx.send(channel_update_msg);    
+                }
             }
             None => {
                 info!("No message received");
