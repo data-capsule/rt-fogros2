@@ -20,6 +20,56 @@ pub struct RoutingManagerRequest {
 }
 
 
+// #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
+// pub enum FibChangeAction {
+//     ADD,
+//     PAUSE,    // pausing the forwarding of the topic, keeping connections alive
+//     PAUSEADD, // adding the entry to FIB, but keeps it paused
+//     RESUME,   // resume a paused topic
+//     DELETE,   // deleting a local topic interface and all its connections
+//     RESPONSE,
+// }
+
+// #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
+// pub enum FibConnectionType {
+//     REQUEST,
+//     RESPONSE,
+//     SENDER,
+//     RECEIVER,
+//     BIDIRECTIONAL,
+// }
+
+// #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
+// pub enum TopicStateInFIB {
+//     RUNNING,
+//     PAUSED,
+//     DELETED,
+// }
+
+// #[derive(Debug)]
+// pub struct FibStateChange {
+//     pub action: FibChangeAction,
+//     pub connection_type: FibConnectionType,
+//     pub topic_gdp_name: GDPName,
+//     pub forward_destination: Option<UnboundedSender<GDPPacket>>,
+//     pub description: Option<String>,
+// }
+
+// #[derive(Debug)]
+// pub struct FibConnection {
+//     pub state: TopicStateInFIB,
+//     pub connection_type: FibConnectionType,
+//     pub tx: UnboundedSender<GDPPacket>,
+//     pub description: Option<String>,
+// }
+
+// #[derive(Debug)]
+// pub struct FIBState {
+//     pub receivers: Vec<FibConnection>,
+// }
+
+
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibChangeAction {
     ADD,
@@ -27,7 +77,7 @@ pub enum FibChangeAction {
     PAUSEADD, // adding the entry to FIB, but keeps it paused
     RESUME,   // resume a paused topic
     DELETE,   // deleting a local topic interface and all its connections
-    RESPONSE,
+    STATE,    // save the state of the topic
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]

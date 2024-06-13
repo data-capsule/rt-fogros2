@@ -18,6 +18,7 @@ pub mod service_request_manager_udp;
 // pub mod service_manager_webrtc;
 pub mod service_manager;
 pub mod service_request_manager_webrtc;
+pub mod routing_manager;
 // pub mod topic_manager;
 pub mod ebpf_routing_manager;
 pub mod util;

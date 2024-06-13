@@ -1,5 +1,6 @@
 use crate::logger::{handle_logs, Logger};
 use chrono;
+use fogrs_common::fib_structs::{FIBState, FibChangeAction, FibConnection, FibConnectionType, FibStateChange, TopicStateInFIB};
 use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -8,54 +9,6 @@ use std::time::SystemTime;
 // for write_all()
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum FibChangeAction {
-    ADD,
-    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
-    PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME,   // resume a paused topic
-    DELETE,   // deleting a local topic interface and all its connections
-    STATE,    // save the state of the topic
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum FibConnectionType {
-    REQUEST,
-    RESPONSE,
-    SENDER,
-    RECEIVER,
-    BIDIRECTIONAL,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum TopicStateInFIB {
-    RUNNING,
-    PAUSED,
-    DELETED,
-}
-
-#[derive(Debug)]
-pub struct FibStateChange {
-    pub action: FibChangeAction,
-    pub connection_type: FibConnectionType,
-    pub topic_gdp_name: GDPName,
-    pub forward_destination: Option<UnboundedSender<GDPPacket>>,
-    pub description: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct FibConnection {
-    pub state: TopicStateInFIB,
-    pub connection_type: FibConnectionType,
-    tx: UnboundedSender<GDPPacket>,
-    pub description: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct FIBState {
-    pub receivers: Vec<FibConnection>,
-}
 
 /// receive, check, and route GDP messages
 ///

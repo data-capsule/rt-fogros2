@@ -178,15 +178,19 @@ pub async fn service_connection_fib_handler(
                         };
                         // TODO: pause add
                     },
-                    FibChangeAction::RESPONSE => {
-                        // info!("Response channel received {:?}", update);
-                        // // insert the response channel
-                        // response_forwarding_table.insert(update.topic_gdp_name, update.forward_destination.unwrap());
+                    _ => {
+                        error!("Unknown action {:?}", update.action);
+                        continue;
                     }
-                    FibChangeAction::PAUSE => todo!(),
-                    FibChangeAction::PAUSEADD => todo!(),
-                    FibChangeAction::RESUME => todo!(),
-                    FibChangeAction::DELETE => todo!(),
+                    // FibChangeAction::RESPONSE => {
+                    //     // info!("Response channel received {:?}", update);
+                    //     // // insert the response channel
+                    //     // response_forwarding_table.insert(update.topic_gdp_name, update.forward_destination.unwrap());
+                    // }
+                    // FibChangeAction::PAUSE => todo!(),
+                    // FibChangeAction::PAUSEADD => todo!(),
+                    // FibChangeAction::RESUME => todo!(),
+                    // FibChangeAction::DELETE => todo!(),
                     // FibChangeAction::PAUSEADD => {
                     //     //todo pause
                     // },
