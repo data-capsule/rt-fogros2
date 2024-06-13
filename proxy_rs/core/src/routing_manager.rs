@@ -175,12 +175,14 @@ pub async fn register_stream_sender(
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName,
     direction: String,
+    fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>,
 ) {
 
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
-    let sender_key_name = format!("{:?}-{:}", topic_gdp_name, &direction);
-    let receiver_key_name = format!("{:?}-{:}", topic_gdp_name, flip_direction(&direction).unwrap());
+    let receiver_key_name  = format!("{:?}-{:}", topic_gdp_name, &direction);
+    let sender_key_name = format!("{:?}-{:}", topic_gdp_name, flip_direction(&direction).unwrap());
     let sender_thread_gdp_name = generate_random_gdp_name();
     let sender_thread_gdp_name_str = format!("{:?}", sender_thread_gdp_name);
 
@@ -297,11 +299,12 @@ impl RoutingManager {
         &self, mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
     ) {
         let connection_type = FibConnectionType::SENDER;
+        let mut handles = vec![];
         while let Some(request) = request_rx.recv().await {
             let fib_tx = self.fib_tx.clone();
             let channel_tx = self.channel_tx.clone();
             // let ebpf_tx = self.ebpf_tx.clone();
-            tokio::spawn(async move {
+            handles.push(tokio::spawn(async move {
                 let topic_name = request.topic_name.clone();
                 let topic_type = request.topic_type.clone();
                 let certificate = request.certificate.clone();
@@ -318,7 +321,7 @@ impl RoutingManager {
 
                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                 let channel_tx_clone = channel_tx.clone();
-                let _rtc_handle = tokio::spawn(
+                let network_handle = tokio::spawn(
                     async move {
                         let direction = format!("{:?}-{}", connection_type, "sender");
 
@@ -343,7 +346,8 @@ impl RoutingManager {
                 };
                 let _ = channel_tx.send(channel_update_msg);
                 info!("remote sender sent channel update message");
-            });
+                tokio::join!(network_handle);
+            }));
         }
     }
 
@@ -351,11 +355,12 @@ impl RoutingManager {
         &self, mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
     ) {
         let connection_type = FibConnectionType::RECEIVER;
+        let mut handles = vec![];
         while let Some(request) = request_rx.recv().await {
             let fib_tx = self.fib_tx.clone();
             let channel_tx = self.channel_tx.clone();
             // let ebpf_tx = self.ebpf_tx.clone();
-            tokio::spawn(async move {
+            handles.push(tokio::spawn(async move {
                 let topic_name = request.topic_name.clone();
                 let topic_type = request.topic_type.clone();
                 let certificate = request.certificate.clone();
@@ -382,11 +387,11 @@ impl RoutingManager {
     
                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                     let channel_tx_clone = channel_tx.clone();
-                    let _rtc_handle = tokio::spawn(
+                    let network_handle = tokio::spawn(
                         async move {
-                            let direction = format!("{:?}-{}", connection_type, "sender");
+                            let direction = format!("{:?}-{}", connection_type, "receiver");
     
-                            register_stream_sender(
+                            register_stream_receiver(
                                 topic_gdp_name,
                                 direction,
                                 fib_tx.clone(),
@@ -407,8 +412,9 @@ impl RoutingManager {
                     };
                     let _ = channel_tx.send(channel_update_msg);
                     info!("remote sender sent channel update message");
+                    tokio::join!(network_handle);
                 });
-            });
+            }));
         }
     }
 
