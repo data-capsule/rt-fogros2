@@ -1,4 +1,5 @@
 
+use crate::network::udp::reader_and_writer;
 use crate::service_request_manager_udp::service_connection_fib_handler;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
@@ -43,7 +44,7 @@ fn flip_direction(direction: &str) -> Option<String> {
     panic!("Invalid direction {:?}", direction);
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RoutingManager {
     // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
     fib_tx: UnboundedSender<GDPPacket>,
@@ -162,13 +163,15 @@ impl RoutingManager {
                 );
 
                 let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                let _rtc_handle = tokio::spawn(reader_and_writer(
+                let _rtc_handle = tokio::spawn(
+                    reader_and_writer (
                     topic_gdp_name,
                     format!("{:?}-{}", connection_type, "sender"),
                     fib_tx,
                     // ebpf_tx,
                     local_to_rtc_rx,
-                ));
+                )
+            );
                 let channel_update_msg = FibStateChange {
                     action: FibChangeAction::ADD,
                     topic_gdp_name: topic_gdp_name,
@@ -202,7 +205,8 @@ impl RoutingManager {
                     &certificate,
                 ));
                 let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                let _rtc_handle = tokio::spawn(reader_and_writer(
+                let _rtc_handle = tokio::spawn(
+                    reader_and_writer(
                     topic_gdp_name,
                     format!("{:?}-{}", connection_type, "receiver"),
                     fib_tx,
