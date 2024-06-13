@@ -35,17 +35,20 @@ fn flip_direction(direction: &str) -> Option<String> {
         ("response-sender", "response-receiver"),
         ("request-sender", "request-receiver"),
         ("response-receiver", "response-sender"),
-        ("pub-receiver", "sub-sender"),
-        ("sub-sender", "pub-receiver"),
-        ("pub-sender", "sub-receiver"),
-        ("sub-receiver", "pub-sender"),
+        // ("pub-receiver", "sub-sender"),
+        // ("sub-sender", "pub-receiver"),
+        // ("pub-sender", "sub-receiver"),
+        // ("sub-receiver", "pub-sender"),
+        ("SENDER-sender", "RECEIVER-receiver"),
+        ("RECEIVER-receiver", "SENDER-sender"),
     ];
+    info!("direction {:?}", direction);
     for (k, v) in mapping.iter() {
         if k == &direction {
             return Some(v.to_string());
         }
     }
-    None
+    panic!("Invalid direction {:?}", direction);
 }
 
 pub async fn register_stream(

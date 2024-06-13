@@ -365,6 +365,9 @@ class SGC_Swarm:
             session_id = node.address + child.address
 
             if node.address == self.instance_identifer:
+                self.logger.info(
+                    f"topic_action {topic_action} reverse {reverse_pub_sub(topic_action)}"
+                )
                 # establish request channel from node to child
                 self.send_routing_request_topic(
                     self.sgc_address,

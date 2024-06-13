@@ -77,80 +77,80 @@ impl RoutingManager {
         }
     }
 
-    pub async fn handle_publisher_routing(
-        &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
-    ) {
-        let connection_type = FibConnectionType::SENDER;
-        while let Some(request) = request_rx.recv().await {
-            let fib_tx = self.fib_tx.clone();
-            let channel_tx = self.channel_tx.clone();
-            // let ebpf_tx = self.ebpf_tx.clone();
-            tokio::spawn(async move {
-                let topic_name = request.topic_name.clone();
-                let topic_type = request.topic_type.clone();
-                let certificate = request.certificate.clone();
-                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                    &topic_name,
-                    &topic_type,
-                    &certificate,
-                ));
+    // pub async fn handle_publisher_routing(
+    //     &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
+    // ) {
+    //     let connection_type = FibConnectionType::PUBLISHER;
+    //     while let Some(request) = request_rx.recv().await {
+    //         let fib_tx = self.fib_tx.clone();
+    //         let channel_tx = self.channel_tx.clone();
+    //         // let ebpf_tx = self.ebpf_tx.clone();
+    //         tokio::spawn(async move {
+    //             let topic_name = request.topic_name.clone();
+    //             let topic_type = request.topic_type.clone();
+    //             let certificate = request.certificate.clone();
+    //             let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+    //                 &topic_name,
+    //                 &topic_type,
+    //                 &certificate,
+    //             ));
 
-                warn!(
-                    "sender_network_routing_thread_manager {:?}",
-                    connection_type
-                );
+    //             warn!(
+    //                 "sender_network_routing_thread_manager {:?}",
+    //                 connection_type
+    //             );
 
-                let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                let _rtc_handle = tokio::spawn(reader_and_writer(
-                    topic_gdp_name,
-                    format!("{:?}-{}", connection_type, "sender"),
-                    fib_tx,
-                    // ebpf_tx,
-                    local_to_rtc_rx,
-                ));
-                let channel_update_msg = FibStateChange {
-                    action: FibChangeAction::ADD,
-                    topic_gdp_name: topic_gdp_name,
-                    connection_type: connection_type,
-                    forward_destination: Some(local_to_rtc_tx),
-                    description: Some(format!(
-                        "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
-                        topic_name, topic_type, connection_type
-                    )),
-                };
-                let _ = channel_tx.send(channel_update_msg);
-                info!("remote sender sent channel update message");
-            });
-        }
-    }
+    //             let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+    //             let _rtc_handle = tokio::spawn(reader_and_writer(
+    //                 topic_gdp_name,
+    //                 format!("{:?}-{}", connection_type, "sender"),
+    //                 fib_tx,
+    //                 // ebpf_tx,
+    //                 local_to_rtc_rx,
+    //             ));
+    //             let channel_update_msg = FibStateChange {
+    //                 action: FibChangeAction::ADD,
+    //                 topic_gdp_name: topic_gdp_name,
+    //                 connection_type: connection_type,
+    //                 forward_destination: Some(local_to_rtc_tx),
+    //                 description: Some(format!(
+    //                     "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
+    //                     topic_name, topic_type, connection_type
+    //                 )),
+    //             };
+    //             let _ = channel_tx.send(channel_update_msg);
+    //             info!("remote sender sent channel update message");
+    //         });
+    //     }
+    // }
 
-    pub async fn handle_subscriber_routing(
-        &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
-    ) {
-        let connection_type = FibConnectionType::RECEIVER;
-        while let Some(request) = request_rx.recv().await {
-            let fib_tx = self.fib_tx.clone();
-            // let ebpf_tx = self.ebpf_tx.clone();
-            tokio::spawn(async move {
-                let topic_name = request.topic_name.clone();
-                let topic_type = request.topic_type.clone();
-                let certificate = request.certificate.clone();
-                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                    &topic_name,
-                    &topic_type,
-                    &certificate,
-                ));
-                let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                let _rtc_handle = tokio::spawn(reader_and_writer(
-                    topic_gdp_name,
-                    format!("{:?}-{}", connection_type, "receiver"),
-                    fib_tx,
-                    // ebpf_tx,
-                    local_to_rtc_rx,
-                ));
-            });
-        }
-    }
+    // pub async fn handle_subscriber_routing(
+    //     &self, mut request_rx: UnboundedReceiver<TopicManagerRequest>,
+    // ) {
+    //     let connection_type = FibConnectionType::RECEIVER;
+    //     while let Some(request) = request_rx.recv().await {
+    //         let fib_tx = self.fib_tx.clone();
+    //         // let ebpf_tx = self.ebpf_tx.clone();
+    //         tokio::spawn(async move {
+    //             let topic_name = request.topic_name.clone();
+    //             let topic_type = request.topic_type.clone();
+    //             let certificate = request.certificate.clone();
+    //             let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+    //                 &topic_name,
+    //                 &topic_type,
+    //                 &certificate,
+    //             ));
+    //             let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+    //             let _rtc_handle = tokio::spawn(reader_and_writer(
+    //                 topic_gdp_name,
+    //                 format!("{:?}-{}", connection_type, "receiver"),
+    //                 fib_tx,
+    //                 // ebpf_tx,
+    //                 local_to_rtc_rx,
+    //             ));
+    //         });
+    //     }
+    // }
 
 
     pub async fn handle_sender_routing(
@@ -294,17 +294,18 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
         routing_manager_clone.handle_service_routing(service_operation_rx).await;
     });
 
-    let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
-    let routing_manager_clone = routing_manager.clone();
-    tokio::spawn(async move {
-        routing_manager_clone.handle_publisher_routing(publisher_operation_rx).await;
-    });
+    // TODO: this will be created under ROS
+    // let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
+    // let routing_manager_clone = routing_manager.clone();
+    // tokio::spawn(async move {
+    //     routing_manager_clone.handle_sender_routing(publisher_operation_rx).await;
+    // });
 
-    let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
-    let routing_manager_clone = routing_manager.clone();
-    tokio::spawn(async move {
-        routing_manager_clone.handle_subscriber_routing(subscriber_operation_rx).await;
-    });
+    // let (subscriber_operation_tx, subscriber_operation_rx) = mpsc::unbounded_channel();
+    // let routing_manager_clone = routing_manager.clone();
+    // tokio::spawn(async move {
+    //     routing_manager_clone.handle_receiver_routing(subscriber_operation_rx).await;
+    // });
 
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
     let routing_manager_clone = routing_manager.clone();
@@ -375,7 +376,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     topic_type: topic_type,
                                     certificate: certificate,
                                 };
-                                let _ = publisher_operation_tx.send(topic_creator_request);
+                                // let _ = publisher_operation_tx.send(topic_creator_request);
                             }
 
                             // provide service remotely and interact with local service, and send back
@@ -389,7 +390,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     topic_type: topic_type,
                                     certificate: certificate,
                                 };
-                                let _ = subscriber_operation_tx.send(topic_creator_request);
+                                // let _ = subscriber_operation_tx.send(topic_creator_request);
                             },
                             _ => {
                                 warn!("unknown action {}", action);
