@@ -134,14 +134,14 @@ pub async fn register_stream_sender(
                             .expect("Failed to parse receiver address");
                         let _ = stream.connect(receiver_socket_addr).await;
                         info!("connected to {:?}", receiver_socket_addr);
-                        let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                         let fib_clone = fib_tx.clone();
                         tokio::spawn(async move {
                             reader_and_writer(
                                 stream,
                                 fib_clone,
                                 // ebpf_tx,
-                                local_to_rtc_rx,
+                                local_to_net_rx,
                             ).await;
                         });
                         // send to fib an update
@@ -149,7 +149,7 @@ pub async fn register_stream_sender(
                             action: FibChangeAction::ADD,
                             topic_gdp_name: topic_gdp_name,
                             connection_type: FibConnectionType::RECEIVER, // it connects to a remote receiver
-                            forward_destination: Some(local_to_rtc_tx),
+                            forward_destination: Some(local_to_net_tx),
                             description: Some(format!(
                                 "udp stream for topic_name {:?} to address {:?}",
                                 topic_gdp_name, receiver_addr
@@ -199,14 +199,14 @@ pub async fn register_stream_sender(
 //                         .expect("Failed to parse receiver address");
 //                     let _ = stream.connect(receiver_socket_addr).await;
 //                     info!("connected to {:?}", receiver_socket_addr);
-//                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+//                     let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
 //                     let fib_clone = fib_tx.clone();
 //                     tokio::spawn(async move {
 //                         reader_and_writer(
 //                             stream,
 //                             fib_clone,
 //                             // ebpf_tx,
-//                             local_to_rtc_rx,
+//                             local_to_net_rx,
 //                         )
 //                     });
 //                     // send to fib an update
@@ -214,7 +214,7 @@ pub async fn register_stream_sender(
 //                         action: FibChangeAction::ADD,
 //                         topic_gdp_name: topic_gdp_name,
 //                         connection_type: FibConnectionType::SENDER,
-//                         forward_destination: Some(local_to_rtc_tx),
+//                         forward_destination: Some(local_to_net_tx),
 //                         description: Some(format!(
 //                             "udp stream for topic_name {:?}",
 //                             topic_gdp_name,
@@ -303,6 +303,29 @@ pub async fn register_stream_receiver(
                     let sock_public_addr = get_socket_stun(&stream).await.unwrap();
                     info!("UDP socket is bound to {:?}", sock_public_addr);
 
+                    let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                    let fib_tx_clone = fib_tx.clone();
+                    tokio::spawn(async move {
+                        reader_and_writer(
+                            stream,
+                            fib_tx_clone,
+                            // ebpf_tx,
+                            local_to_net_rx,
+                        )
+                        .await;
+                    });
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::ADD,
+                        topic_gdp_name: topic_gdp_name,
+                        connection_type: FibConnectionType::SENDER, // it connects from a remote sender
+                        forward_destination: Some(local_to_net_tx),
+                        description: Some(format!(
+                            "udp stream receiver for topic_name {:?} bind to address {:?}",
+                            topic_gdp_name, sock_public_addr
+                        )),
+                    };
+                    channel_tx.send(channel_update_msg).expect("Cannot send channel update message");
+
                     let sender_receiver_key =
                         format!("{}-{:}", sender_gdp_name, receiver_key_name);
                     let _ = add_entity_to_database_as_transaction(
@@ -380,7 +403,7 @@ impl RoutingManager {
                         connection_type
                     );
 
-                    let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                    let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                     let channel_tx_clone = channel_tx.clone();
                     tokio::spawn(async move {
                         let direction = format!("{:?}-{}", connection_type, "sender");
@@ -398,7 +421,7 @@ impl RoutingManager {
                         action: FibChangeAction::ADD,
                         topic_gdp_name: topic_gdp_name,
                         connection_type: connection_type,
-                        forward_destination: Some(local_to_rtc_tx),
+                        forward_destination: Some(local_to_net_tx),
                         description: Some(format!(
                             "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
                             topic_name, topic_type, connection_type
@@ -441,7 +464,7 @@ impl RoutingManager {
                             connection_type
                         );
 
-                        let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                         let channel_tx_clone = channel_tx.clone();
 
                         let direction = format!("{:?}-{}", connection_type, "receiver");
@@ -458,7 +481,7 @@ impl RoutingManager {
                             action: FibChangeAction::ADD,
                             topic_gdp_name: topic_gdp_name,
                             connection_type: connection_type,
-                            forward_destination: Some(local_to_rtc_tx),
+                            forward_destination: Some(local_to_net_tx),
                             description: Some(format!(
                                 "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
                                 topic_name, topic_type, connection_type
@@ -490,7 +513,7 @@ impl RoutingManager {
         //             &topic_type,
         //             &certificate,
         //         ));
-        //         // let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+        //         // let (_local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                 
         //             let topic_name = request.topic_name.clone();
         //             let topic_type = request.topic_type.clone();
@@ -506,14 +529,14 @@ impl RoutingManager {
         //                 connection_type
         //             );
 
-        //             let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+        //             let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
         //             let channel_tx_clone = channel_tx.clone();
 
         //             let channel_update_msg = FibStateChange {
         //                 action: FibChangeAction::ADD,
         //                 topic_gdp_name: topic_gdp_name,
         //                 connection_type: connection_type,
-        //                 forward_destination: Some(local_to_rtc_tx),
+        //                 forward_destination: Some(local_to_net_tx),
         //                 description: Some(format!(
         //                     "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
         //                     topic_name, topic_type, connection_type

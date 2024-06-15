@@ -355,12 +355,10 @@ pub async fn reader_and_writer(
                 info!("the header size is {}", header_string.len());
                 info!("the header to sent is {}", header_string);
 
-                let destination_ip = get_non_existent_ip_addr();
-                let destination = SocketAddr::new(std::net::IpAddr::V4(destination_ip), 8888);
                 //insert the first null byte to separate the packet header
                 header_string.push(0u8 as char);
                 let header_string_payload = header_string.as_bytes();
-                match stream.send_to(&header_string_payload[..header_string_payload.len()],destination).await {
+                match stream.send(&header_string_payload[..header_string_payload.len()]).await {
                     Ok(_) => {},
                     Err(e) => {
                         warn!("The connection is closed: {}", e);
@@ -371,14 +369,14 @@ pub async fn reader_and_writer(
                 // stream.write_all(&packet.payload[..packet.payload.len()]).await.unwrap();
                 if let Some(payload) = pkt_to_forward.payload {
                     info!("the payload length is {}", payload.len());
-                    stream.send_to(&payload[..payload.len()], destination).await.unwrap();
+                    stream.send(&payload[..payload.len()]).await.unwrap();
                 }
 
                 if let Some(name_record) = pkt_to_forward.name_record {
                     let name_record_string = serde_json::to_string(&name_record).unwrap();
                     let name_record_buffer = name_record_string.as_bytes();
                     info!("the name record length is {}", name_record_buffer.len());
-                    stream.send_to(&name_record_buffer[..name_record_buffer.len()], destination).await.unwrap();
+                    stream.send(&name_record_buffer[..name_record_buffer.len()]).await.unwrap();
                 }
             }
 
