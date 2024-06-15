@@ -349,7 +349,7 @@ pub async fn reader_and_writer(
             },
 
             Some(pkt_to_forward) = rtc_rx.recv() => {
-                //info!("TCP packet to forward: {:.unwrap()}", pkt_to_forward);
+                info!("received a packet {}", pkt_to_forward);
                 let transit_header = pkt_to_forward.get_header();
                 let mut header_string = serde_json::to_string(&transit_header).unwrap();
                 info!("the header size is {}", header_string.len());

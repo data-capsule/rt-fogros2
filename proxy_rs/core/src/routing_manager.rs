@@ -142,17 +142,17 @@ pub async fn register_stream_sender(
                                 fib_clone,
                                 // ebpf_tx,
                                 local_to_rtc_rx,
-                            )
+                            ).await;
                         });
                         // send to fib an update
                         let channel_update_msg = FibStateChange {
                             action: FibChangeAction::ADD,
                             topic_gdp_name: topic_gdp_name,
-                            connection_type: FibConnectionType::SENDER,
+                            connection_type: FibConnectionType::RECEIVER, // it connects to a remote receiver
                             forward_destination: Some(local_to_rtc_tx),
                             description: Some(format!(
-                                "udp stream for topic_name {:?}",
-                                topic_gdp_name,
+                                "udp stream for topic_name {:?} to address {:?}",
+                                topic_gdp_name, receiver_addr
                             )),
                         };
                         let _ = channel_tx.send(channel_update_msg);

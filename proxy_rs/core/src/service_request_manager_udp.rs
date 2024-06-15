@@ -46,12 +46,13 @@ pub async fn service_connection_fib_handler(
                 match pkt.action {
                     GdpAction::Forward => {
                         let topic_state = rib_state_table.get(&pkt.gdpname);
-                        info!("the current topic state is {:?}", topic_state);
+                        info!("the current topic state is {:#?}", topic_state);
                         match topic_state {
                             Some(s) => {
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
-                                        let _ = dst.tx.send(pkt.clone());
+                                        info!("forwarding to {:?}", dst.description);
+                                        dst.tx.send(pkt.clone()).unwrap();
                                     } else {
                                         warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
                                     }
