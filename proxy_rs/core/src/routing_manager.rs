@@ -9,7 +9,7 @@ use fogrs_common::packet_structs::{
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
 use redis_async::resp::FromResp;
-use redis_async::{client, error};
+use redis_async::client;
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 
@@ -121,6 +121,7 @@ pub async fn register_stream_sender(
                             "receiver_channel {:?}, not starting with {}",
                             receiver_channel, sender_thread_gdp_name_str
                         );
+                        continue;
                     }
 
                     // query value of key [sender_gdp_name, receiver_gdp_name] to be the receiver_addr

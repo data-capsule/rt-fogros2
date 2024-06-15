@@ -1,5 +1,4 @@
 use crate::pipeline::construct_gdp_packet_with_guid;
-use crate::util::get_non_existent_ip_addr;
 use fogrs_common::packet_structs::GDPHeaderInTransit;
 use fogrs_common::packet_structs::GDPName;
 use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet};
