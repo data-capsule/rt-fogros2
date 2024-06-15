@@ -62,12 +62,29 @@ impl From<u16be> for u16 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash, Default)]
 pub struct GDPName(pub [u8; 4]); // 256 bit destination
 impl fmt::Display for GDPName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        // write 4 u8 as hex
+        write!(
+            f,
+            "{:02x}{:02x}{:02x}{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
     }
+}
+
+impl fmt::Debug for GDPName {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // write 4 u8 as hex
+        write!(
+            f,
+            "{:02x}{:02x}{:02x}{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3]
+        )
+    }
+
 }
 
 pub fn generate_random_gdp_name() -> GDPName {
