@@ -96,69 +96,132 @@ pub async fn register_stream_sender(
     let mut processed_receivers = vec![];
 
     loop {
-        let message = msgs.next().await;
-        match message {
-            Some(message) => {
-                let received_operation = String::from_resp(message.unwrap()).unwrap();
-                info!("KVS {}", received_operation);
-                if received_operation != "lpush" {
-                    info!("the operation is not lpush, ignore");
-                    continue;
-                }
-                let updated_receivers = get_entity_from_database(&redis_url, &receiver_key_name)
-                    .expect("Cannot get receiver from database");
-                info!("get a list of receivers from KVS {:?}", updated_receivers);
-                let new_receivers = updated_receivers
-                    .iter()
-                    .filter(|&r| !processed_receivers.contains(r))
-                    .collect::<Vec<_>>();
-
-                for receiver_addr in new_receivers {
-                    info!("new receiver {:?}", receiver_addr);
-                    processed_receivers.push(receiver_addr.to_string());
-                    // check if value starts with sender_thread_gdp_name_str
-                    if !receiver_addr.starts_with(&sender_thread_gdp_name_str) {
-                        info!(
-                            "receiver_addr {:?}, not starting with {}",
-                            receiver_addr, sender_thread_gdp_name_str
-                        );
+        tokio::select! {
+            Some(message) = msgs.next() => {
+                    let received_operation = String::from_resp(message.unwrap()).unwrap();
+                    info!("KVS {}", received_operation);
+                    if received_operation != "lpush" {
+                        info!("the operation is not lpush, ignore");
+                        continue;
                     }
+                    let updated_receivers = get_entity_from_database(&redis_url, &receiver_key_name)
+                        .expect("Cannot get receiver from database");
+                    info!("get a list of receivers from KVS {:?}", updated_receivers);
+                    let new_receivers = updated_receivers
+                        .iter()
+                        .filter(|&r| !processed_receivers.contains(r))
+                        .collect::<Vec<_>>();
 
-                    let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-                    let receiver_socket_addr: SocketAddr = receiver_addr
-                        .parse()
-                        .expect("Failed to parse receiver address");
-                    let _ = stream.connect(receiver_socket_addr).await;
-                    info!("connected to {:?}", receiver_socket_addr);
-                    let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                    let fib_clone = fib_tx.clone();
-                    tokio::spawn(async move {
-                        reader_and_writer(
-                            stream,
-                            fib_clone,
-                            // ebpf_tx,
-                            local_to_rtc_rx,
-                        )
-                    });
-                    // send to fib an update
-                    let channel_update_msg = FibStateChange {
-                        action: FibChangeAction::ADD,
-                        topic_gdp_name: topic_gdp_name,
-                        connection_type: FibConnectionType::SENDER,
-                        forward_destination: Some(local_to_rtc_tx),
-                        description: Some(format!(
-                            "udp stream for topic_name {:?}",
-                            topic_gdp_name,
-                        )),
-                    };
-                    let _ = channel_tx.send(channel_update_msg);
+                    for receiver_addr in new_receivers {
+                        info!("new receiver {:?}", receiver_addr);
+                        processed_receivers.push(receiver_addr.to_string());
+                        // check if value starts with sender_thread_gdp_name_str
+                        if !receiver_addr.starts_with(&sender_thread_gdp_name_str) {
+                            info!(
+                                "receiver_addr {:?}, not starting with {}",
+                                receiver_addr, sender_thread_gdp_name_str
+                            );
+                        }
+
+                        let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+                        let receiver_socket_addr: SocketAddr = receiver_addr
+                            .parse()
+                            .expect("Failed to parse receiver address");
+                        let _ = stream.connect(receiver_socket_addr).await;
+                        info!("connected to {:?}", receiver_socket_addr);
+                        let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                        let fib_clone = fib_tx.clone();
+                        tokio::spawn(async move {
+                            reader_and_writer(
+                                stream,
+                                fib_clone,
+                                // ebpf_tx,
+                                local_to_rtc_rx,
+                            )
+                        });
+                        // send to fib an update
+                        let channel_update_msg = FibStateChange {
+                            action: FibChangeAction::ADD,
+                            topic_gdp_name: topic_gdp_name,
+                            connection_type: FibConnectionType::SENDER,
+                            forward_destination: Some(local_to_rtc_tx),
+                            description: Some(format!(
+                                "udp stream for topic_name {:?}",
+                                topic_gdp_name,
+                            )),
+                        };
+                        let _ = channel_tx.send(channel_update_msg);
+                    }
+                        
+                }
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                    info!("waiting for message");
                 }
             }
-            None => {
-                info!("No message received");
-            }
-        }
-    }
+        } //loop
+// }
+//         let message = msgs.next().await;
+//         match message {
+//             Some(message) => {
+//                 let received_operation = String::from_resp(message.unwrap()).unwrap();
+//                 info!("KVS {}", received_operation);
+//                 if received_operation != "lpush" {
+//                     info!("the operation is not lpush, ignore");
+//                     continue;
+//                 }
+//                 let updated_receivers = get_entity_from_database(&redis_url, &receiver_key_name)
+//                     .expect("Cannot get receiver from database");
+//                 info!("get a list of receivers from KVS {:?}", updated_receivers);
+//                 let new_receivers = updated_receivers
+//                     .iter()
+//                     .filter(|&r| !processed_receivers.contains(r))
+//                     .collect::<Vec<_>>();
+
+//                 for receiver_addr in new_receivers {
+//                     info!("new receiver {:?}", receiver_addr);
+//                     processed_receivers.push(receiver_addr.to_string());
+//                     // check if value starts with sender_thread_gdp_name_str
+//                     if !receiver_addr.starts_with(&sender_thread_gdp_name_str) {
+//                         info!(
+//                             "receiver_addr {:?}, not starting with {}",
+//                             receiver_addr, sender_thread_gdp_name_str
+//                         );
+//                     }
+
+//                     let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+//                     let receiver_socket_addr: SocketAddr = receiver_addr
+//                         .parse()
+//                         .expect("Failed to parse receiver address");
+//                     let _ = stream.connect(receiver_socket_addr).await;
+//                     info!("connected to {:?}", receiver_socket_addr);
+//                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+//                     let fib_clone = fib_tx.clone();
+//                     tokio::spawn(async move {
+//                         reader_and_writer(
+//                             stream,
+//                             fib_clone,
+//                             // ebpf_tx,
+//                             local_to_rtc_rx,
+//                         )
+//                     });
+//                     // send to fib an update
+//                     let channel_update_msg = FibStateChange {
+//                         action: FibChangeAction::ADD,
+//                         topic_gdp_name: topic_gdp_name,
+//                         connection_type: FibConnectionType::SENDER,
+//                         forward_destination: Some(local_to_rtc_tx),
+//                         description: Some(format!(
+//                             "udp stream for topic_name {:?}",
+//                             topic_gdp_name,
+//                         )),
+//                     };
+//                     let _ = channel_tx.send(channel_update_msg);
+//                 }
+//             }
+//             None => {
+//                 info!("No message received");
+//             }
+//         }
 }
 
 
@@ -198,6 +261,13 @@ pub async fn register_stream_receiver(
         .await
         .expect("Cannot subscribe to topic");
     info!("subscribed to {:?}", redis_topic_stream_name);
+
+    info!("Attempting to subscribe to topic: {}", redis_topic_stream_name);
+
+    let current_value_under_key = get_entity_from_database(&redis_url, &sender_key_name)
+        .expect("Cannot get sender from database");
+    info!("get a list of senders from KVS {:?}", current_value_under_key);
+    // info!("Redis configuration: notify-keyspace-events = {}", get_redis_config_value("notify-keyspace-events").unwrap());
 
     let mut processed_senders = vec![];
     loop {
@@ -260,26 +330,6 @@ pub async fn register_stream_receiver(
             }
         }
     }
-
-    // if updated_receivers.len() != 0 {
-    //     let receiver_addr = updated_receivers[0].clone();
-    //     let receiver_socket_addr: SocketAddr = receiver_addr
-    //         .parse()
-    //         .expect("Failed to parse receiver address");
-    // }
-
-    // // TODO: fix following code later, assume listener start before writer
-    // let redis_addr_and_port = get_redis_address_and_port();
-    // let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-    //     .await
-    //     .expect("Cannot connect to Redis");
-    // let redis_topic_stream_name: String = format!("__keyspace@0__:{}", receiver_topic);
-    // allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
-    // let mut msgs = pubsub_con
-    //     .psubscribe(&redis_topic_stream_name)
-    //     .await
-    //     .expect("Cannot subscribe to topic");
-    // info!("subscribed to {:?}", redis_topic_stream_name);
 }
 
 #[derive(Clone)]
@@ -362,21 +412,13 @@ impl RoutingManager {
     ) {
         let connection_type = FibConnectionType::RECEIVER;
         let mut handles = vec![];
-        while let Some(request) = request_rx.recv().await {
-            let fib_tx = self.fib_tx.clone();
-            let channel_tx = self.channel_tx.clone();
-            // let ebpf_tx = self.ebpf_tx.clone();
-            handles.push(tokio::spawn(async move {
-                let topic_name = request.topic_name.clone();
-                let topic_type = request.topic_type.clone();
-                let certificate = request.certificate.clone();
-                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                    &topic_name,
-                    &topic_type,
-                    &certificate,
-                ));
-                // let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                
+
+        tokio::select! {
+            Some(request) = request_rx.recv() => {
+                let fib_tx = self.fib_tx.clone();
+                let channel_tx = self.channel_tx.clone();
+                // let ebpf_tx = self.ebpf_tx.clone();
+                handles.push(tokio::spawn(async move {
                     let topic_name = request.topic_name.clone();
                     let topic_type = request.topic_type.clone();
                     let certificate = request.certificate.clone();
@@ -393,18 +435,6 @@ impl RoutingManager {
 
                     let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
                     let channel_tx_clone = channel_tx.clone();
-                    let network_handle = tokio::spawn(async move {
-                        let direction = format!("{:?}-{}", connection_type, "receiver");
-
-                        register_stream_receiver(
-                            topic_gdp_name,
-                            direction,
-                            fib_tx.clone(),
-                            channel_tx_clone,
-                        )
-                        .await;
-                        warn!("receiver_network_routing_thread_manager {:?} finished", connection_type);
-                    });
 
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
@@ -418,11 +448,83 @@ impl RoutingManager {
                     };
                     let _ = channel_tx.send(channel_update_msg);
                     info!("remote sender sent channel update message");
-                    tokio::join!(network_handle);
+
+                    let direction = format!("{:?}-{}", connection_type, "receiver");
+
+                    register_stream_receiver(
+                        topic_gdp_name,
+                        direction,
+                        fib_tx.clone(),
+                        channel_tx_clone,
+                    )
+                    .await;
                     warn!("receiver_network_routing_thread_manager {:?} finished", connection_type);
-                
-            }));
+                }));
+            }
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                info!("waiting for message");
+            }
         }
+
+        // while let Some(request) = request_rx.recv().await {
+        //     let fib_tx = self.fib_tx.clone();
+        //     let channel_tx = self.channel_tx.clone();
+        //     // let ebpf_tx = self.ebpf_tx.clone();
+        //     handles.push(tokio::spawn(async move {
+        //         let topic_name = request.topic_name.clone();
+        //         let topic_type = request.topic_type.clone();
+        //         let certificate = request.certificate.clone();
+        //         let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+        //             &topic_name,
+        //             &topic_type,
+        //             &certificate,
+        //         ));
+        //         // let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+                
+        //             let topic_name = request.topic_name.clone();
+        //             let topic_type = request.topic_type.clone();
+        //             let certificate = request.certificate.clone();
+        //             let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+        //                 &topic_name,
+        //                 &topic_type,
+        //                 &certificate,
+        //             ));
+
+        //             warn!(
+        //                 "receiver_network_routing_thread_manager {:?}",
+        //                 connection_type
+        //             );
+
+        //             let (local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
+        //             let channel_tx_clone = channel_tx.clone();
+
+        //             let channel_update_msg = FibStateChange {
+        //                 action: FibChangeAction::ADD,
+        //                 topic_gdp_name: topic_gdp_name,
+        //                 connection_type: connection_type,
+        //                 forward_destination: Some(local_to_rtc_tx),
+        //                 description: Some(format!(
+        //                     "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
+        //                     topic_name, topic_type, connection_type
+        //                 )),
+        //             };
+        //             let _ = channel_tx.send(channel_update_msg);
+        //             info!("remote sender sent channel update message");
+
+        //             let direction = format!("{:?}-{}", connection_type, "receiver");
+
+        //             register_stream_receiver(
+        //                 topic_gdp_name,
+        //                 direction,
+        //                 fib_tx.clone(),
+        //                 channel_tx_clone,
+        //             )
+        //             .await;
+        //             warn!("receiver_network_routing_thread_manager {:?} finished", connection_type);
+                
+        //     }
+        // ));
+        // }
     }
 
     pub async fn handle_client_routing(&self, request_rx: UnboundedReceiver<TopicManagerRequest>) {
