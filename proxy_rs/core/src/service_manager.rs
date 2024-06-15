@@ -3,8 +3,8 @@ use crate::api_server::ROSTopicRequest;
 
 use crate::routing_manager::RoutingManager;
 use crate::service_request_manager_udp::service_connection_fib_handler;
+use fogrs_common::fib_structs::FibChangeAction;
 use fogrs_common::fib_structs::RoutingManagerRequest;
-use fogrs_common::fib_structs::{FibChangeAction};
 use fogrs_common::packet_structs::{get_gdp_name_from_topic, GDPName};
 use redis_async::error;
 
@@ -12,8 +12,8 @@ use redis_async::error;
 use core::panic;
 use std::env;
 use tokio::select;
-use tokio::sync::mpsc::{UnboundedReceiver}; // TODO: replace it out
-                                                             // use fogrs_common::fib_structs::TopicManagerAction;
+use tokio::sync::mpsc::UnboundedReceiver; // TODO: replace it out
+                                          // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
 
 
@@ -273,5 +273,4 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     }
 
     futures::future::try_join_all(waiting_handles).await;
-
 }

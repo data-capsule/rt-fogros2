@@ -2,8 +2,8 @@ use fogrs_common::packet_structs::Packet;
 use fogrs_common::{
     fib_structs::{FibChangeAction, FibConnectionType, FibStateChange},
     packet_structs::{
-        construct_gdp_forward_from_bytes, generate_random_gdp_name,
-        get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction,
+        construct_gdp_forward_from_bytes, generate_random_gdp_name, get_gdp_name_from_topic,
+        GDPName, GDPPacket, GdpAction,
     },
 };
 use futures::StreamExt;

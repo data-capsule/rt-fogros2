@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::time::SystemTime;
 // for write_all()
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver};
+use tokio::sync::mpsc::UnboundedReceiver;
 
 /// receive, check, and route GDP messages
 ///
