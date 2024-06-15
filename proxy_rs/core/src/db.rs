@@ -38,7 +38,7 @@ pub fn add_entity_to_database_as_transaction(
     })?;
     info!("The current number of entities in database is: {}", new_val);
     println!(
-        "successfully added entity {} {} to database {}",
+        "successfully added entity key: {} ; value: {} to database with length {}",
         key, value, new_val
     );
     Ok(())

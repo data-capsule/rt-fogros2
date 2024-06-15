@@ -215,7 +215,7 @@ class SGC_Router_Node(rclpy.node.Node):
             )
         else:
             subprocess.call(
-                f"cargo build --manifest-path {sgc_path}/Cargo.toml",
+                f"RUSTFLAGS=\"--cfg tokio_unstable\" cargo build --manifest-path {sgc_path}/Cargo.toml",
                 env=current_env,
                 shell=True,
             )

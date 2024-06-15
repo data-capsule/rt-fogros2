@@ -22,7 +22,7 @@ fn main() -> Result<()> {
             .install();
     }
 
-    env_logger::init();
+    // env_logger::init();
 
     // Initialize Configuration
     // let include_path = match env::var_os("SGC_CONFIG") {

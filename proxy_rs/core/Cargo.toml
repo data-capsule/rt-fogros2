@@ -30,7 +30,6 @@ tokio = { version = "1.22", features = ["full"] }
 tokio-core = "0.1"
 futures = "0.3.19"
 tokio-openssl = '0.6'
-tonic = "0.8"
 prost = "0.11"
 sha2 = "0.10.6"
 base64="0.13.0"
@@ -55,8 +54,5 @@ librice = "=0.0.3"
 clap = { version = "4.1", features = ["derive"] }
 bytes = "1"
 env_logger = "0.11.3"
-
-
-[build-dependencies]
-tonic-build = "0.8"
+console-subscriber = "0.3.0"
 

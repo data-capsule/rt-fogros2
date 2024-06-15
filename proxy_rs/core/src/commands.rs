@@ -43,6 +43,7 @@ use utils::error::Result;
 /// TODO: later put to another file
 #[tokio::main]
 async fn webrtc_router_async_loop() {
+    console_subscriber::init();
     let (topic_request_tx, topic_request_rx) = mpsc::unbounded_channel();
 
     let (service_request_tx, service_request_rx) = mpsc::unbounded_channel();

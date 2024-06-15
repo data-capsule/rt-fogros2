@@ -8,7 +8,7 @@ use fogrs_common::packet_structs::{
 };
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
-use redis_async::client;
+use redis_async::{client, error};
 use redis_async::resp::FromResp;
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
@@ -201,6 +201,7 @@ pub async fn register_stream_receiver(
 
     let mut processed_senders = vec![];
     loop {
+        info!("waiting for message");
         let message = msgs.next().await;
         match message {
             Some(message) => {
@@ -375,7 +376,7 @@ impl RoutingManager {
                     &certificate,
                 ));
                 // let (_local_to_rtc_tx, local_to_rtc_rx) = mpsc::unbounded_channel();
-                tokio::spawn(async move {
+                
                     let topic_name = request.topic_name.clone();
                     let topic_type = request.topic_type.clone();
                     let certificate = request.certificate.clone();
@@ -386,7 +387,7 @@ impl RoutingManager {
                     ));
 
                     warn!(
-                        "sender_network_routing_thread_manager {:?}",
+                        "receiver_network_routing_thread_manager {:?}",
                         connection_type
                     );
 
@@ -402,6 +403,7 @@ impl RoutingManager {
                             channel_tx_clone,
                         )
                         .await;
+                        warn!("receiver_network_routing_thread_manager {:?} finished", connection_type);
                     });
 
                     let channel_update_msg = FibStateChange {
@@ -417,7 +419,8 @@ impl RoutingManager {
                     let _ = channel_tx.send(channel_update_msg);
                     info!("remote sender sent channel update message");
                     tokio::join!(network_handle);
-                });
+                    warn!("receiver_network_routing_thread_manager {:?} finished", connection_type);
+                
             }));
         }
     }
