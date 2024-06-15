@@ -69,7 +69,7 @@ impl fmt::Display for GDPName {
         // write 4 u8 as hex
         write!(
             f,
-            "{:02x}{:02x}{:02x}{:02x}",
+            "GNAME0x{:02x}{:02x}{:02x}{:02x}",
             self.0[0], self.0[1], self.0[2], self.0[3]
         )
     }
@@ -80,7 +80,7 @@ impl fmt::Debug for GDPName {
         // write 4 u8 as hex
         write!(
             f,
-            "{:02x}{:02x}{:02x}{:02x}",
+            "0x{:02x}{:02x}{:02x}{:02x}",
             self.0[0], self.0[1], self.0[2], self.0[3]
         )
     }
