@@ -18,7 +18,8 @@ members = [
     "core",
     "signaling",
     "fogrs-ros",
-    "fogrs-common"
+    "fogrs-common",
+    "fogrs-kcp",
 ]
 
 [features]
