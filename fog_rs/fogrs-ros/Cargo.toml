@@ -1,5 +1,5 @@
 [package]
-name = "fogrs-common"
+name = "fogrs-ros"
 version = "0.0.1-beta"
 authors = ["Eric Chen <kych@berkeley.edu>"]
 description = "The application core code"
@@ -7,22 +7,27 @@ edition = "2021"
 
 
 [dependencies]
-utils = { path = "../utils" }
+fogrs-utils = { path = "../fogrs-utils" }
+fogrs-common = { path = "../fogrs-common" }
 
 rand = "0.8.4"
 log = "0.4.14"
+local-ip-address = "0.4.9"
 strum_macros = "0.24.3"
 anyhow = "1.0.66"
 derivative = "2.2.0"
 strum = "0.24.1"
+multimap = "0.8.3"
+openssl = "0.10.42"
 regex="1.7.0"
 serde = "1.0.149"
 serde_json = "*"
 tokio = { version = "1.22", features = ["full"] }
 tokio-core = "0.1"
+futures = "0.3.19"
 # r2r = {path = "/home/gdpmobile8/r2r/r2r"}
-# r2r = {git = "https://github.com/KeplerC/r2r.git", rev = "85f6ab046"}
-sha2 = "0.10.6"
+r2r = {git = "https://github.com/KeplerC/r2r.git", rev = "85f6ab046"}
+
 clap = { version = "4.1", features = ["derive"] }
 bytes = "1"
 env_logger = "0.11.3"

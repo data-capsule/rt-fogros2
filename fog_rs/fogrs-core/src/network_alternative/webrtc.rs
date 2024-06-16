@@ -1,15 +1,18 @@
 use axum::async_trait;
 use fogrs_common::packet_structs::construct_gdp_packet_with_guid;
 use fogrs_common::packet_structs::GDPName;
-use fogrs_common::packet_structs::Packet;
 use tokio::net::UdpSocket;
 use librice::stun::attribute::*;
 use librice::stun::message::*;
+use tokio::sync::mpsc;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::Mutex;
 use crate::ebpf_routing_manager::register_stream;
 use crate::network::parse_header_payload_pairs;
-use crate::util::get_non_existent_ip_addr;
+use crate::fogrs_util::get_non_existent_ip_addr;
+use crate::fogrs_util::get_signaling_server_address;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 // use async_trait::async_trait;
@@ -17,90 +20,107 @@ use serde::{Deserialize, Serialize};
 use async_datachannel::DataStream;
 use fogrs_common::packet_structs::{GDPPacket, GDPHeaderInTransit, GdpAction};
 
-const UDP_BUFFER_SIZE: usize = 1500;
+use async_datachannel::{DataStream, Message, PeerConnection, RtcConfig};
+use async_tungstenite::{tokio::connect_async, tungstenite};
+use futures::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    SinkExt, StreamExt};
 
-use super::ConnectionManager;
-
-pub struct UdpManager {
-    socket: UdpSocket,
-    peer_addr: Option<SocketAddr>,
+#[derive(Debug, Serialize, Deserialize)]
+struct SignalingMessage {
+    id: String,
+    payload: Message,
 }
 
-impl UdpManager {
-    pub async fn new() -> Self {
-        let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-        let peer_addr = None;
-
-        UdpManager { socket, peer_addr }
-    }
-
-    async fn get_socket_stun(&self) -> Result<SocketAddr, std::io::Error> {
-        let ice_server = SocketAddr::from_str("3.18.194.127:3478").unwrap();
-        let mut msg = Message::new_request(BINDING);
-        msg.add_fingerprint().unwrap();
-
-        self.udp_ice_get(msg, ice_server).await
-    }
-
-    async fn udp_ice_get(
-        &self,
-        out: Message,
-        to: SocketAddr,
-    ) -> Result<SocketAddr, std::io::Error> {
-        info!("generated to {}", out);
-        let buf = out.to_bytes();
-        self.socket.send_to(&buf, to).await?;
-        let mut buf = [0; 1500];
-        let (amt, _) = self.socket.recv_from(&mut buf).await?;
-        let buf = &buf[..amt];
-        let msg = Message::from_bytes(buf)
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid message"))?;
-        info!("got message {:?}", msg);
-
-        parse_response(msg)
-    }
+pub struct WebRTCManager {
+    ice_servers: Vec<String>,
+    signaling_uri: String,
+    peer_id: Arc<Mutex<Option<String>>>,
 }
 
-fn parse_response(response: Message) -> Result<SocketAddr, std::io::Error> {
-    if Message::check_attribute_types(&response, &[XOR_MAPPED_ADDRESS, FINGERPRINT], &[
-        XOR_MAPPED_ADDRESS,
-    ])
-    .is_some()
-    {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Required attributes not found in response",
-        ));
+impl WebRTCManager {
+    pub fn new(my_id: &str) -> Self {
+        let ice_servers = vec!["stun:stun.l.google.com:19302".to_string()];
+        let signaling_uri = format!("{}/{}", get_signaling_server_address(), my_id);
+        let peer_id = Arc::new(Mutex::new(None));
+
+        WebRTCManager {
+            ice_servers,
+            signaling_uri,
+            peer_id,
+        }
     }
-    if response.has_class(MessageClass::Success) {
-        let mapped_address = response
-            .attribute::<XorMappedAddress>(XOR_MAPPED_ADDRESS)
-            .unwrap();
-        let visible_addr = mapped_address.addr(response.transaction_id());
-        info!("found visible address {:?}", visible_addr);
-        Ok(visible_addr)
-    } else {
-        warn!("got error response {:?}", response);
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Error response",
-        ))
+
+    async fn handle_signaling_outbound(
+        mut write: futures::stream::SplitSink<async_tungstenite::WebSocketStream<async_tungstenite::tokio::ConnectStream>, tungstenite::Message>,
+        mut rx_sig_outbound: mpsc::Receiver<Message>,
+        peer_id: Arc<Mutex<Option<String>>>,
+    ) {
+        while let Some(m) = rx_sig_outbound.next().await {
+            if let Some(ref id) = *peer_id.lock() {
+                let message = SignalingMessage {
+                    payload: m,
+                    id: id.clone(),
+                };
+                let s = serde_json::to_string(&message).unwrap();
+                info!("Sending {:?}", s);
+                if write.send(tungstenite::Message::text(s)).await.is_err() {
+                    error!("Error sending message");
+                    break;
+                }
+            }
+        }
+    }
+
+    async fn handle_signaling_inbound(
+        mut read: futures::stream::SplitStream<async_tungstenite::WebSocketStream<async_tungstenite::tokio::ConnectStream>>,
+        mut tx_sig_inbound: mpsc::Sender<Message>,
+        peer_id: Arc<Mutex<Option<String>>>,
+    ) {
+        while let Some(Ok(m)) = read.next().await {
+            info!("Received {:?}", m);
+            if let Ok(value) = match m {
+                tungstenite::Message::Text(t) => serde_json::from_str::<serde_json::Value>(&t),
+                tungstenite::Message::Binary(b) => serde_json::from_slice(&b[..]),
+                _ => Err(serde_json::Error::custom("Unsupported message type")),
+            } {
+                if let Ok(message) = serde_json::from_value::<SignalingMessage>(value) {
+                    info!("Parsed message {:?}", message);
+                    *peer_id.lock() = Some(message.id.clone());
+                    if tx_sig_inbound.send(message.payload).await.is_err() {
+                        panic!("Failed to send message to channel");
+                    }
+                }
+            }
+        }
     }
 }
 
 #[async_trait]
-impl ConnectionManager for UdpManager {
+impl ConnectionManager for WebRTCManager {
     async fn register_stream(&self, peer_to_dial: Option<String>) -> Result<(), std::io::Error> {
-        let sock_public_addr = self.get_socket_stun().await?;
-        info!("UDP socket is bound to {:?}", sock_public_addr);
+        let conf = RtcConfig::new(&self.ice_servers);
+        let (tx_sig_outbound, mut rx_sig_outbound) = mpsc::channel(32);
+        let (mut tx_sig_inbound, rx_sig_inbound) = mpsc::channel(32);
+        let listener = PeerConnection::new(&conf, (tx_sig_outbound, rx_sig_inbound)).unwrap();
 
-        let _ = tokio::spawn(register_stream(
-            GDPName::default(), // Placeholder, replace with actual GDPName
-            "direction".to_string(), // Placeholder, replace with actual direction
-            sock_public_addr,
-        ));
+        let signaling_uri = self.signaling_uri.clone();
+        let (mut write, mut read) = connect_async(&signaling_uri).await.unwrap().0.split();
+        let peer_id = self.peer_id.clone();
+        if let Some(ref peer) = peer_to_dial {
+            *peer_id.lock() = Some(peer.clone());
+        }
 
-        Ok(())
+        tokio::spawn(Self::handle_signaling_outbound(write, rx_sig_outbound, peer_id.clone()));
+        tokio::spawn(Self::handle_signaling_inbound(read, tx_sig_inbound, peer_id.clone()));
+
+        if peer_to_dial.is_some() {
+            info!("Dialing {:?}", peer_to_dial);
+            listener.dial("connection").await.map(|_| ())
+        } else {
+            info!("Accepting connection");
+            listener.accept().await.map(|_| ())
+        }
     }
 
     async fn handle_data_stream(
@@ -108,6 +128,8 @@ impl ConnectionManager for UdpManager {
         ros_tx: UnboundedSender<GDPPacket>,
         mut rtc_rx: UnboundedReceiver<GDPPacket>,
     ) {
+        let mut stream = self.register_stream(None).await.unwrap();
+
         let mut need_more_data_for_previous_header = false;
         let mut remaining_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
             action: GdpAction::Noop,
@@ -122,7 +144,7 @@ impl ConnectionManager for UdpManager {
         loop {
             let mut receiving_buf = vec![0u8; UDP_BUFFER_SIZE];
             tokio::select! {
-                Ok((receiving_buf_size, _)) = self.socket.recv_from(&mut receiving_buf) => {
+                Ok(receiving_buf_size) = stream.read(&mut receiving_buf) => {
                     let mut receiving_buf = receiving_buf[..receiving_buf_size].to_vec();
                     info!("read {} bytes", receiving_buf_size);
 
@@ -187,18 +209,16 @@ impl ConnectionManager for UdpManager {
                     info!("the header size is {}", header_string.len());
                     info!("the header to sent is {}", header_string);
 
-                    let destination_ip = get_non_existent_ip_addr();
-                    let destination = SocketAddr::new(std::net::IpAddr::V4(destination_ip), 8888);
                     header_string.push(0u8 as char);
                     let header_string_payload = header_string.as_bytes();
-                    if self.socket.send_to(&header_string_payload[..header_string_payload.len()], destination).await.is_err() {
+                    if stream.write_all(header_string_payload).await.is_err() {
                         warn!("The connection is closed while sending header");
                         break;
                     }
 
                     if let Some(payload) = pkt_to_forward.payload {
                         info!("the payload length is {}", payload.len());
-                        if self.socket.send_to(&payload[..payload.len()], destination).await.is_err() {
+                        if stream.write_all(&payload).await.is_err() {
                             warn!("The connection is closed while sending payload");
                             break;
                         }
@@ -208,7 +228,7 @@ impl ConnectionManager for UdpManager {
                         let name_record_string = serde_json::to_string(&name_record).unwrap();
                         let name_record_buffer = name_record_string.as_bytes();
                         info!("the name record length is {}", name_record_buffer.len());
-                        if self.socket.send_to(&name_record_buffer[..name_record_buffer.len()], destination).await.is_err() {
+                        if stream.write_all(&name_record_buffer).await.is_err() {
                             warn!("The connection is closed while sending name record");
                             break;
                         }

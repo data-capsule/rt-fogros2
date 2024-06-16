@@ -1,4 +1,4 @@
-use utils::app_config::*;
+use fogrs_utils::app_config::*;
 
 #[test]
 fn verify_get() {

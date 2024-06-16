@@ -2,7 +2,7 @@
 
 #[cfg(debug_assertions)] extern crate better_panic;
 
-use utils::error::Result;
+use fogrs_utils::error::Result;
 
 /// The main entry point of the application.
 fn main() -> Result<()> {

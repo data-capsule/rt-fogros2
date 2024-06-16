@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "fogrs-core"
 version = "0.0.1-beta"
 authors = ["Eric Chen <kych@berkeley.edu>", "Jiachen Yuan <jcyuan_johnson@berkeley.edu>"]
 description = "The application core code"
@@ -10,7 +10,7 @@ default = ["ros"]
 ros = []
 
 [dependencies]
-utils = { path = "../utils" }
+fogrs-utils = { path = "../fogrs-utils" }
 fogrs-ros = { path = "../fogrs-ros" }
 fogrs-common = { path = "../fogrs-common" }
 

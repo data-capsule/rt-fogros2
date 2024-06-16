@@ -3,11 +3,11 @@ use clap_complete::{
     generate,
     shells::{Bash, Fish, Zsh},
 };
-use core::commands;
+use fogrs_core::commands;
 use std::path::PathBuf;
-use utils::app_config::AppConfig;
-use utils::error::Result;
-use utils::types::LogLevel;
+use fogrs_utils::app_config::AppConfig;
+use fogrs_utils::error::Result;
+use fogrs_utils::types::LogLevel;
 
 #[derive(Parser, Debug)]
 #[clap(

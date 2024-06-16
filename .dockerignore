@@ -1,4 +1,4 @@
-./proxy_rs/target
+./fog_rs/target
 Dockerfile
 .dockerignore
 .git

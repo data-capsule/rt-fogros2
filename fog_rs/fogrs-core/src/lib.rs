@@ -22,7 +22,7 @@ pub mod service_request_manager_webrtc;
 // pub mod topic_manager;
 pub mod ebpf_routing_manager;
 pub mod util;
-use utils::error::Result;
+use fogrs_utils::error::Result;
 
 pub fn start() -> Result<()> {
     // does nothing

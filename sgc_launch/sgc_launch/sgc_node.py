@@ -136,7 +136,7 @@ class SGC_Router_Node(rclpy.node.Node):
         current_env["PATH"] = f"/usr/sbin:/sbin:{current_env['PATH']}"
         ws_path = current_env["COLCON_PREFIX_PATH"]
         # source directory of sgc
-        sgc_path = f"{ws_path}/../rt-fogros2/proxy_rs"
+        sgc_path = f"{ws_path}/../rt-fogros2/fog_rs"
         # directory of all the config files
         config_path = (
             f"{ws_path}/sgc_launch/share/sgc_launch/configs"
