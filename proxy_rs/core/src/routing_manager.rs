@@ -168,6 +168,7 @@ pub async fn register_stream_sender(
 }
 
 
+
 // protocol:
 // requirement, receiver connection needs to be created before sender
 // key: {<topic_name>-sender}, value: [a list of sender gdp names]
@@ -177,6 +178,81 @@ pub async fn register_stream_sender(
 //          1. put value {IP_address} to key {[sender-receiver]}
 //          2. append value [sender_gdp_name, receiver_gdp_name] to {<topic_name>-receiver}
 // sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
+
+pub async fn receiver_registration_handler(
+    topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String,
+    fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
+    processed_senders: &mut Vec<String>,
+){
+    let redis_url = get_redis_url();
+    
+    let updated_senders = get_entity_from_database(&redis_url, &sender_key_name)
+    .expect("Cannot get sender from database");
+    info!("get a list of senders from KVS {:?}", updated_senders);
+    let new_senders = updated_senders
+        .iter()
+        .filter(|&r| !processed_senders.contains(r))
+        .collect::<Vec<_>>();
+
+    for sender_gdp_name in new_senders {
+        info!("new sender {:?}", sender_gdp_name);
+        processed_senders.push(sender_gdp_name.to_string());
+        // put value {IP_address} to key {[sender-receiver]}
+
+        let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+
+        let sock_public_addr = get_socket_stun(&stream).await.unwrap();
+        info!("UDP socket is bound to {:?}", sock_public_addr);
+
+        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+        let fib_tx_clone = fib_tx.clone();
+        tokio::spawn(async move {
+            reader_and_writer(
+                stream,
+                fib_tx_clone,
+                // ebpf_tx,
+                local_to_net_rx,
+            )
+            .await;
+        });
+        let channel_update_msg = FibStateChange {
+            action: FibChangeAction::ADD,
+            topic_gdp_name: topic_gdp_name,
+            connection_type: FibConnectionType::SENDER, // it connects from a remote sender
+            forward_destination: Some(local_to_net_tx),
+            description: Some(format!(
+                "udp stream receiver for topic_name {:?} bind to address {:?}",
+                topic_gdp_name, sock_public_addr
+            )),
+        };
+        channel_tx.send(channel_update_msg).expect("Cannot send channel update message");
+
+        let sender_receiver_key =
+            format!("{}-{:}", sender_gdp_name, receiver_key_name);
+        let _ = add_entity_to_database_as_transaction(
+            &redis_url,
+            &sender_receiver_key,
+            format!("{}", sock_public_addr).as_str(),
+        );
+        info!(
+            "registered {:?} with {:?}",
+            sender_receiver_key, sock_public_addr
+        );
+
+        // append value [sender_gdp_name, receiver_gdp_name] to {<topic_name>-receiver}
+        let sender_receiver_value =
+            format!("{}-{:}", sender_gdp_name, receiver_key_name);
+        let _ = add_entity_to_database_as_transaction(
+            &redis_url,
+            &receiver_key_name,
+            sender_receiver_value.as_str(),
+        );
+        info!(
+            "registered {:?} with {:?}",
+            sender_gdp_name, receiver_key_name
+        );
+    }
+}
 
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
@@ -219,6 +295,17 @@ pub async fn register_stream_receiver(
     // info!("Redis configuration: notify-keyspace-events = {}", get_redis_config_value("notify-keyspace-events").unwrap());
 
     let mut processed_senders = vec![];
+
+    // check senders that are already in the KVS
+    receiver_registration_handler(
+        topic_gdp_name.clone(),
+        receiver_key_name.clone(),
+        sender_key_name.clone(),
+        fib_tx.clone(),
+        channel_tx.clone(),
+        &mut processed_senders,
+    ).await;
+
     loop {
         tokio::select! {
             Some(message) = msgs.next() => {
@@ -228,77 +315,27 @@ pub async fn register_stream_receiver(
                     info!("the operation is not lpush, ignore");
                     continue;
                 }
-
-                let updated_senders = get_entity_from_database(&redis_url, &sender_key_name)
-                    .expect("Cannot get sender from database");
-                info!("get a list of senders from KVS {:?}", updated_senders);
-                let new_senders = updated_senders
-                    .iter()
-                    .filter(|&r| !processed_senders.contains(r))
-                    .collect::<Vec<_>>();
-
-                for sender_gdp_name in new_senders {
-                    info!("new sender {:?}", sender_gdp_name);
-                    processed_senders.push(sender_gdp_name.to_string());
-                    // put value {IP_address} to key {[sender-receiver]}
-
-                    let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-
-                    let sock_public_addr = get_socket_stun(&stream).await.unwrap();
-                    info!("UDP socket is bound to {:?}", sock_public_addr);
-
-                    let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
-                    let fib_tx_clone = fib_tx.clone();
-                    tokio::spawn(async move {
-                        reader_and_writer(
-                            stream,
-                            fib_tx_clone,
-                            // ebpf_tx,
-                            local_to_net_rx,
-                        )
-                        .await;
-                    });
-                    let channel_update_msg = FibStateChange {
-                        action: FibChangeAction::ADD,
-                        topic_gdp_name: topic_gdp_name,
-                        connection_type: FibConnectionType::SENDER, // it connects from a remote sender
-                        forward_destination: Some(local_to_net_tx),
-                        description: Some(format!(
-                            "udp stream receiver for topic_name {:?} bind to address {:?}",
-                            topic_gdp_name, sock_public_addr
-                        )),
-                    };
-                    channel_tx.send(channel_update_msg).expect("Cannot send channel update message");
-
-                    let sender_receiver_key =
-                        format!("{}-{:}", sender_gdp_name, receiver_key_name);
-                    let _ = add_entity_to_database_as_transaction(
-                        &redis_url,
-                        &sender_receiver_key,
-                        format!("{}", sock_public_addr).as_str(),
-                    );
-                    info!(
-                        "registered {:?} with {:?}",
-                        sender_receiver_key, sock_public_addr
-                    );
-
-                    // append value [sender_gdp_name, receiver_gdp_name] to {<topic_name>-receiver}
-                    let sender_receiver_value =
-                        format!("{}-{:}", sender_gdp_name, receiver_key_name);
-                    let _ = add_entity_to_database_as_transaction(
-                        &redis_url,
-                        &receiver_key_name,
-                        sender_receiver_value.as_str(),
-                    );
-                    info!(
-                        "registered {:?} with {:?}",
-                        sender_gdp_name, receiver_key_name
-                    );
-                }
+                receiver_registration_handler(
+                    topic_gdp_name.clone(),
+                    receiver_key_name.clone(),
+                    sender_key_name.clone(),
+                    fib_tx.clone(),
+                    channel_tx.clone(),
+                    &mut processed_senders,
+                ).await;
             }
-            // _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
-            //     info!("waiting for redis message");
-            // }
+
+            // check if there is any new sender
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
+                receiver_registration_handler(
+                    topic_gdp_name.clone(),
+                    receiver_key_name.clone(),
+                    sender_key_name.clone(),
+                    fib_tx.clone(),
+                    channel_tx.clone(),
+                    &mut processed_senders,
+                ).await;
+            }
         }
     }
 }
