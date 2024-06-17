@@ -30,7 +30,6 @@ syslog = ["fogrs-utils/syslog"]
 [dependencies]
 fogrs-utils = { path = "./fogrs-utils"}
 fogrs-core = { path = "./fogrs-core" }
-human-panic = "1.0.3"
 better-panic = "0.3.0"
 log = { version = "0.4.14", features = ["release_max_level_off"] }
 env_logger = "0.11.3"

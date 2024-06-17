@@ -7,18 +7,13 @@ edition = "2021"
 
 
 [dependencies]
-fogrs-utils = { path = "../fogrs-utils" }
 fogrs-common = { path = "../fogrs-common" }
 
 rand = "0.8.4"
 log = "0.4.14"
-local-ip-address = "0.4.9"
 strum_macros = "0.24.3"
 anyhow = "1.0.66"
-derivative = "2.2.0"
 strum = "0.24.1"
-multimap = "0.8.3"
-openssl = "0.10.42"
 regex="1.7.0"
 serde = "1.0.149"
 serde_json = "*"
@@ -28,6 +23,4 @@ futures = "0.3.19"
 # r2r = {path = "/home/gdpmobile8/r2r/r2r"}
 r2r = {git = "https://github.com/KeplerC/r2r.git", rev = "85f6ab046"}
 
-clap = { version = "4.1", features = ["derive"] }
 bytes = "1"
-env_logger = "0.11.3"

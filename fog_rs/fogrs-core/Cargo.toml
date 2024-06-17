@@ -17,10 +17,8 @@ fogrs-kcp = { path = "../fogrs-kcp" }
 
 rand = "0.8.4"
 log = "0.4.14"
-local-ip-address = "0.4.9"
 strum_macros = "0.24.3"
 anyhow = "1.0.66"
-derivative = "2.2.0"
 strum = "0.24.1"
 multimap = "0.8.3"
 openssl = "0.10.42"
@@ -30,10 +28,8 @@ serde_json = "*"
 tokio = { version = "1.38", features = ["full"] }
 tokio-core = "0.1"
 futures = "0.3.19"
-tokio-openssl = '0.6'
 # prost = "0.11"
 sha2 = "0.10.6"
-base64="0.13.0"
 lazy_static = "1.4"
 hyper = { version = "0.14.16", features = ["full"] }
 # async-datachannel = "0.4.0"
@@ -55,5 +51,4 @@ byte_string = "1"
 clap = { version = "4.1", features = ["derive"] }
 bytes = "1"
 env_logger = "0.11.3"
-console-subscriber = "0.3.0"
 
