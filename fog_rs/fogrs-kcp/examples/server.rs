@@ -1,12 +1,12 @@
 use std::{net::SocketAddr, time::Duration};
 
 use byte_string::ByteStr;
+use fogrs_kcp::{KcpConfig, KcpListener};
 use log::{debug, error, info};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time,
 };
-use fogrs_kcp::{KcpConfig, KcpListener};
 
 #[tokio::main]
 async fn main() {

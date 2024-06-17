@@ -1,7 +1,7 @@
 use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
 use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
-use crate::network::udp::get_socket_stun;
 use crate::network::kcp::reader_and_writer;
+use crate::network::udp::get_socket_stun;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
 use fogrs_common::packet_structs::{
@@ -10,12 +10,9 @@ use fogrs_common::packet_structs::{
 use fogrs_kcp::{KcpConfig, KcpListener, KcpStream};
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
-use redis_async::resp::FromResp;
 use redis_async::client;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::time;
+use redis_async::resp::FromResp;
 use std::net::SocketAddr;
-use std::time::Duration;
 use tokio::net::UdpSocket;
 
 use core::panic;
@@ -139,7 +136,7 @@ pub async fn register_stream_sender(
                     // let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
                     // let _ = stream.connect(receiver_socket_addr).await;
                     let config = KcpConfig::default();
-                    let mut stream = KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
+                    let stream = KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
                     info!("connected to {:?}", receiver_socket_addr);
                     let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                     let fib_clone = fib_tx.clone();
@@ -174,7 +171,6 @@ pub async fn register_stream_sender(
 }
 
 
-
 // protocol:
 // requirement, receiver connection needs to be created before sender
 // key: {<topic_name>-sender}, value: [a list of sender gdp names]
@@ -189,9 +185,9 @@ pub async fn receiver_registration_handler(
     topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String,
     fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
     processed_senders: &mut Vec<String>,
-){
+) {
     let redis_url = get_redis_url();
-    
+
     let updated_senders = get_entity_from_database(&redis_url, &sender_key_name)
         .expect("Cannot get sender from database");
     info!("get a list of senders from KVS {:?}", updated_senders);
@@ -228,8 +224,7 @@ pub async fn receiver_registration_handler(
             // )
             // .await;
 
-            let sender_receiver_key =
-                format!("{}-{:}", sender_gdp_name, receiver_key_name);
+            let sender_receiver_key = format!("{}-{:}", sender_gdp_name, receiver_key_name);
             let _ = add_entity_to_database_as_transaction(
                 &redis_url,
                 &sender_receiver_key,
@@ -239,10 +234,9 @@ pub async fn receiver_registration_handler(
                 "registered {:?} with {:?}",
                 sender_receiver_key, sock_public_addr
             );
-    
+
             // append value [sender_gdp_name, receiver_gdp_name] to {<topic_name>-receiver}
-            let sender_receiver_value =
-                format!("{}-{:}", sender_gdp_name, receiver_key_name);
+            let sender_receiver_value = format!("{}-{:}", sender_gdp_name, receiver_key_name);
             let _ = add_entity_to_database_as_transaction(
                 &redis_url,
                 &receiver_key_name,
@@ -256,7 +250,7 @@ pub async fn receiver_registration_handler(
 
             let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
             tokio::spawn(async move {
-                let (mut stream, peer_addr) = match listener.accept().await {
+                let (stream, peer_addr) = match listener.accept().await {
                     Ok(s) => s,
                     Err(err) => {
                         error!("accept failed, error: {}", err);
@@ -264,11 +258,7 @@ pub async fn receiver_registration_handler(
                     }
                 };
                 info!("accepted {}", peer_addr);
-                reader_and_writer(
-                    stream,
-                    fib_tx_clone,
-                    local_to_net_rx,
-                ).await;
+                reader_and_writer(stream, fib_tx_clone, local_to_net_rx).await;
             });
             let channel_update_msg = FibStateChange {
                 action: FibChangeAction::ADD,
@@ -280,11 +270,10 @@ pub async fn receiver_registration_handler(
                     topic_gdp_name, sock_public_addr
                 )),
             };
-            channel_tx_clone.send(channel_update_msg).expect("Cannot send channel update message");
-
-        }
-        );
-       
+            channel_tx_clone
+                .send(channel_update_msg)
+                .expect("Cannot send channel update message");
+        });
     }
 }
 
@@ -338,7 +327,8 @@ pub async fn register_stream_receiver(
         fib_tx.clone(),
         channel_tx.clone(),
         &mut processed_senders,
-    ).await;
+    )
+    .await;
 
     loop {
         tokio::select! {

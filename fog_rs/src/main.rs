@@ -10,9 +10,9 @@ use clap_complete::{
     shells::{Bash, Fish, Zsh},
 };
 use fogrs_core::commands;
-use std::path::PathBuf;
 use fogrs_utils::app_config::AppConfig;
 use fogrs_utils::types::LogLevel;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[clap(

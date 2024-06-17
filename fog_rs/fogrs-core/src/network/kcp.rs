@@ -1,4 +1,3 @@
-
 use crate::pipeline::construct_gdp_packet_with_guid;
 use fogrs_common::packet_structs::GDPHeaderInTransit;
 use fogrs_common::packet_structs::GDPName;
@@ -6,8 +5,6 @@ use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet};
 use fogrs_kcp::KcpStream;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
-use std::str::FromStr;
-use tokio::net::UdpSocket;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 const UDP_BUFFER_SIZE: usize = 65535;
@@ -72,10 +69,9 @@ pub fn parse_header_payload_pairs(
 
 pub async fn reader_and_writer(
     mut stream: KcpStream,
-    ros_tx: UnboundedSender<GDPPacket>, // send to ros
+    ros_tx: UnboundedSender<GDPPacket>,       // send to ros
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
-
     let mut need_more_data_for_previous_header = false;
     let mut remaining_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
         action: GdpAction::Noop,
@@ -87,7 +83,7 @@ pub async fn reader_and_writer(
     let mut remaining_gdp_payload: Vec<u8> = vec![];
     let mut reset_counter = 0; // TODO: a temporary counter to reset the connection
 
-    
+
     loop {
         let mut receiving_buf = vec![0u8; UDP_BUFFER_SIZE];
         // Wait for the UDP socket to be readable
