@@ -3,6 +3,9 @@ use crate::pipeline::construct_gdp_packet_with_guid;
 use fogrs_common::packet_structs::GDPHeaderInTransit;
 use fogrs_common::packet_structs::GDPName;
 use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet};
+use fogrs_kcp::KcpStream;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use std::str::FromStr;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -68,11 +71,10 @@ pub fn parse_header_payload_pairs(
 
 
 pub async fn reader_and_writer(
-    stream: UdpSocket,
+    mut stream: KcpStream,
     ros_tx: UnboundedSender<GDPPacket>, // send to ros
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
 ) {
-    let mut buf = [0; UDP_BUFFER_SIZE];
 
     let mut need_more_data_for_previous_header = false;
     let mut remaining_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
@@ -85,7 +87,7 @@ pub async fn reader_and_writer(
     let mut remaining_gdp_payload: Vec<u8> = vec![];
     let mut reset_counter = 0; // TODO: a temporary counter to reset the connection
 
-
+    
     loop {
         let mut receiving_buf = vec![0u8; UDP_BUFFER_SIZE];
         // Wait for the UDP socket to be readable
@@ -93,7 +95,11 @@ pub async fn reader_and_writer(
         tokio::select! {
             // _ = do_stuff_async()
             // async read is cancellation safe
-            Ok((receiving_buf_size, _)) = stream.recv_from(&mut receiving_buf) => {
+            Ok(receiving_buf_size) = stream.read(&mut receiving_buf) => {
+                if receiving_buf_size == 0 {
+                    error!("The connection is closed");
+                    break;
+                }
                 // let receiving_buf_size = receiving_buf.len();
                 let mut receiving_buf = receiving_buf[..receiving_buf_size].to_vec();
                 info!("read {} bytes", receiving_buf_size);
@@ -175,7 +181,7 @@ pub async fn reader_and_writer(
                 //insert the first null byte to separate the packet header
                 header_string.push(0u8 as char);
                 let header_string_payload = header_string.as_bytes();
-                match stream.send(&header_string_payload[..header_string_payload.len()]).await {
+                match stream.write_all(&header_string_payload[..header_string_payload.len()]).await {
                     Ok(_) => {},
                     Err(e) => {
                         warn!("The connection is closed: {}", e);
@@ -186,14 +192,14 @@ pub async fn reader_and_writer(
                 // stream.write_all(&packet.payload[..packet.payload.len()]).await.unwrap();
                 if let Some(payload) = pkt_to_forward.payload {
                     info!("the payload length is {}", payload.len());
-                    stream.send(&payload[..payload.len()]).await.unwrap();
+                    stream.write_all(&payload[..payload.len()]).await.unwrap();
                 }
 
                 if let Some(name_record) = pkt_to_forward.name_record {
                     let name_record_string = serde_json::to_string(&name_record).unwrap();
                     let name_record_buffer = name_record_string.as_bytes();
                     info!("the name record length is {}", name_record_buffer.len());
-                    stream.send(&name_record_buffer[..name_record_buffer.len()]).await.unwrap();
+                    stream.write_all(&name_record_buffer[..name_record_buffer.len()]).await.unwrap();
                 }
             }
 

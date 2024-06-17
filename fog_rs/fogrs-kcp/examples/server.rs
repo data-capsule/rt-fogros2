@@ -6,7 +6,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time,
 };
-use tokio_kcp::{KcpConfig, KcpListener};
+use fogrs_kcp::{KcpConfig, KcpListener};
 
 #[tokio::main]
 async fn main() {
