@@ -14,7 +14,6 @@ GDP Router
 [workspace]
 members = [
     "fogrs-utils",
-    "cli",
     "fogrs-core",
     "signaling",
     "fogrs-ros",
@@ -29,17 +28,23 @@ journald = ["fogrs-utils/journald"]
 syslog = ["fogrs-utils/syslog"]
 
 [dependencies]
-cli = { path = "cli"}
 fogrs-utils = { path = "./fogrs-utils"}
 fogrs-core = { path = "./fogrs-core" }
 human-panic = "1.0.3"
 better-panic = "0.3.0"
 log = { version = "0.4.14", features = ["release_max_level_off"] }
 env_logger = "0.11.3"
+clap_complete = "3.0"
 
 [dev-dependencies]
 assert_cmd = "2.0.4"
 predicates = "2.1.1"
+
+
+[dependencies.clap]
+version = "3.0.14"
+features = ["cargo", "derive"]
+
 
 [profile.dev]
 opt-level=0
