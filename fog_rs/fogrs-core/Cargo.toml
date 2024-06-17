@@ -27,7 +27,7 @@ openssl = "0.10.42"
 regex="1.7.0"
 serde = "1.0.149"
 serde_json = "*"
-tokio = { version = "1.22", features = ["full"] }
+tokio = { version = "1.38", features = ["full"] }
 tokio-core = "0.1"
 futures = "0.3.19"
 tokio-openssl = '0.6'

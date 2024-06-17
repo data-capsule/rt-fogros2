@@ -253,18 +253,17 @@ pub async fn receiver_registration_handler(
                 sender_gdp_name, receiver_key_name
             );
 
-            let (mut stream, peer_addr) = match listener.accept().await {
-                Ok(s) => s,
-                Err(err) => {
-                    error!("accept failed, error: {}", err);
-                    return;
-                }
-            };
-    
-            info!("accepted {}", peer_addr);
 
             let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
             tokio::spawn(async move {
+                let (mut stream, peer_addr) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(err) => {
+                        error!("accept failed, error: {}", err);
+                        return;
+                    }
+                };
+                info!("accepted {}", peer_addr);
                 reader_and_writer(
                     stream,
                     fib_tx_clone,
