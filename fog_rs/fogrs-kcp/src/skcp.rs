@@ -51,9 +51,14 @@ impl Write for UdpOutput {
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
                 // send return EAGAIN
                 // ignored as packet was lost in transmission
-                trace!("[SEND] UDP send EAGAIN, packet.size: {} bytes, delayed send", buf.len());
+                trace!(
+                    "[SEND] UDP send EAGAIN, packet.size: {} bytes, delayed send",
+                    buf.len()
+                );
 
-                self.delay_tx.send(buf.to_owned()).expect("channel closed unexpectedly");
+                self.delay_tx
+                    .send(buf.to_owned())
+                    .expect("channel closed unexpectedly");
 
                 Ok(buf.len())
             }
@@ -81,11 +86,7 @@ pub struct KcpSocket {
 
 impl KcpSocket {
     pub fn new(
-        c: &KcpConfig,
-        conv: u32,
-        socket: Arc<UdpSocket>,
-        target_addr: SocketAddr,
-        stream: bool,
+        c: &KcpConfig, conv: u32, socket: Arc<UdpSocket>, target_addr: SocketAddr, stream: bool,
     ) -> KcpResult<KcpSocket> {
         let output = UdpOutput::new(socket.clone(), target_addr);
         let mut kcp = if stream {
@@ -120,7 +121,11 @@ impl KcpSocket {
         match self.kcp.input(buf) {
             Ok(..) => {}
             Err(KcpError::ConvInconsistent(expected, actual)) => {
-                trace!("[INPUT] Conv expected={} actual={} ignored", expected, actual);
+                trace!(
+                    "[INPUT] Conv expected={} actual={} ignored",
+                    expected,
+                    actual
+                );
                 return Ok(false);
             }
             Err(err) => return Err(err),
@@ -171,7 +176,9 @@ impl KcpSocket {
         let n = self.kcp.send(buf)?;
         self.sent_first = true;
 
-        if self.kcp.wait_snd() >= self.kcp.snd_wnd() as usize || self.kcp.wait_snd() >= self.kcp.rmt_wnd() as usize {
+        if self.kcp.wait_snd() >= self.kcp.snd_wnd() as usize
+            || self.kcp.wait_snd() >= self.kcp.rmt_wnd() as usize
+        {
             self.kcp.flush()?;
         }
 
@@ -316,7 +323,8 @@ impl KcpSocket {
     }
 
     pub fn need_flush(&self) -> bool {
-        (self.kcp.wait_snd() >= self.kcp.snd_wnd() as usize || self.kcp.wait_snd() >= self.kcp.rmt_wnd() as usize)
+        (self.kcp.wait_snd() >= self.kcp.snd_wnd() as usize
+            || self.kcp.wait_snd() >= self.kcp.rmt_wnd() as usize)
             && !self.kcp.waiting_conv()
     }
 }

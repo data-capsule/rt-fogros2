@@ -53,7 +53,9 @@ impl KcpStream {
     }
 
     /// Create a `KcpStream` with an existed `UdpSocket` connecting to `addr`
-    pub async fn connect_with_socket(config: &KcpConfig, udp: UdpSocket, addr: SocketAddr) -> KcpResult<KcpStream> {
+    pub async fn connect_with_socket(
+        config: &KcpConfig, udp: UdpSocket, addr: SocketAddr,
+    ) -> KcpResult<KcpStream> {
         let udp = Arc::new(udp);
         let conv = rand::random();
         let socket = KcpSocket::new(config, conv, udp, addr, config.stream)?;
@@ -94,8 +96,9 @@ impl KcpStream {
                 let remaining = self.recv_buffer_cap - self.recv_buffer_pos;
                 let copy_length = remaining.min(buf.len());
 
-                buf[..copy_length]
-                    .copy_from_slice(&self.recv_buffer[self.recv_buffer_pos..self.recv_buffer_pos + copy_length]);
+                buf[..copy_length].copy_from_slice(
+                    &self.recv_buffer[self.recv_buffer_pos..self.recv_buffer_pos + copy_length],
+                );
                 self.recv_buffer_pos += copy_length;
                 return Ok(copy_length).into();
             }
@@ -149,7 +152,9 @@ impl KcpStream {
 }
 
 impl AsyncRead for KcpStream {
-    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+    fn poll_read(
+        mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
         match ready!(self.poll_recv(cx, buf.initialize_unfilled())) {
             Ok(n) => {
                 buf.advance(n);
@@ -162,7 +167,9 @@ impl AsyncRead for KcpStream {
 }
 
 impl AsyncWrite for KcpStream {
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+    fn poll_write(
+        mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
         match ready!(self.poll_send(cx, buf)) {
             Ok(n) => Ok(n).into(),
             Err(KcpError::IoError(err)) => Err(err).into(),

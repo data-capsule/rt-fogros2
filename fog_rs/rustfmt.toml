@@ -5,12 +5,15 @@ edition = "2021"
 normalize_comments = true
 wrap_comments = false
 comment_width = 90      # small excess is okay but prefer 80
+reorder_imports = true
+reorder_modules = true
 
 # Arguments:
 use_small_heuristics = "Default"
 fn_args_layout = "Compressed"
 overflow_delimited_expr = true
 where_single_line = true
+condense_wildcard_suffixes = true
 
 # Misc:
 inline_attribute_width = 80

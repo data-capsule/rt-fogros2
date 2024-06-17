@@ -56,8 +56,7 @@ impl Debug for KcpSession {
 
 impl KcpSession {
     fn new(
-        socket: KcpSocket,
-        session_expire: Duration,
+        socket: KcpSocket, session_expire: Duration,
         session_close_notifier: Option<(mpsc::Sender<SocketAddr>, SocketAddr)>,
         input_tx: mpsc::Sender<Vec<u8>>,
     ) -> KcpSession {
@@ -72,8 +71,7 @@ impl KcpSession {
     }
 
     pub fn new_shared(
-        socket: KcpSocket,
-        session_expire: Duration,
+        socket: KcpSocket, session_expire: Duration,
         session_close_notifier: Option<(mpsc::Sender<SocketAddr>, SocketAddr)>,
     ) -> Arc<KcpSession> {
         let is_client = session_close_notifier.is_none();
@@ -256,7 +254,10 @@ impl KcpSession {
     }
 
     pub async fn input(&self, buf: &[u8]) -> Result<(), SessionClosedError> {
-        self.input_tx.send(buf.to_owned()).await.map_err(|_| SessionClosedError)
+        self.input_tx
+            .send(buf.to_owned())
+            .await
+            .map_err(|_| SessionClosedError)
     }
 
     pub async fn conv(&self) -> u32 {
@@ -308,13 +309,8 @@ impl KcpSessionManager {
     }
 
     pub async fn get_or_create(
-        &mut self,
-        config: &KcpConfig,
-        conv: u32,
-        sn: u32,
-        udp: &Arc<UdpSocket>,
-        peer_addr: SocketAddr,
-        session_close_notifier: &mpsc::Sender<SocketAddr>,
+        &mut self, config: &KcpConfig, conv: u32, sn: u32, udp: &Arc<UdpSocket>,
+        peer_addr: SocketAddr, session_close_notifier: &mpsc::Sender<SocketAddr>,
     ) -> KcpResult<(Arc<KcpSession>, bool)> {
         match self.sessions.entry(peer_addr) {
             Entry::Occupied(mut occ) => {
@@ -324,7 +320,8 @@ impl KcpSessionManager {
                     // This is the first packet received from this peer.
                     // Recreate a new session for this specific client.
 
-                    let socket = KcpSocket::new(config, conv, udp.clone(), peer_addr, config.stream)?;
+                    let socket =
+                        KcpSocket::new(config, conv, udp.clone(), peer_addr, config.stream)?;
                     let session = KcpSession::new_shared(
                         socket,
                         config.session_expire,
