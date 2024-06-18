@@ -232,9 +232,9 @@ impl ROSManager {
                             loop{
                                 let pkt_to_forward = ros_rx.recv().await.expect("ros_topic_remote_subscriber_handler crashed!!");
                                 if pkt_to_forward.action == GdpAction::Forward {
-                                    info!("new payload to publish");
                                     if pkt_to_forward.gdpname == topic_gdp_name {
                                         let payload = pkt_to_forward.get_byte_payload().unwrap();
+                                        info!("new payload {:?} to publish to topic {:?}", payload, topic_name);
                                         //let ros_msg = serde_json::from_str(str::from_utf8(payload).unwrap()).expect("json parsing failure");
                                         // info!("the decoded payload to publish is {:?}", ros_msg);
                                         publisher.publish(payload.clone()).unwrap();

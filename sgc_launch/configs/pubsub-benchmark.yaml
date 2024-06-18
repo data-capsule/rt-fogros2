@@ -1,0 +1,45 @@
+
+# crypto based as unique identifiers 
+identifiers: 
+  # crypto for the task (same for all robots/services on the same task)
+  task: test_cert 
+  # crypto unique for the robot 
+  # note #0 : 
+  # for now, it's not bound to an actual certificate yet, name whatever you want
+  # but make sure to match this with the assignment 
+  # note #1 : this value is overriden by rosparam's whoami
+  # note #2 : feel free to define it here or define it at rosparam
+  # whoami: machine_talker 
+  
+topics:
+  - topic_name: /benchmark
+    topic_type: sensor_msgs/msg/CompressedImage
+  - topic_name: /benchmark_echo
+    topic_type: std_msgs/msg/String
+
+# declare possible states 
+# pub: publish to the swarm
+# sub: subscribe to the swarm
+# note this is reversed from prior version of SGC config file
+state_machine: 
+  talker: 
+    topics:
+      - /benchmark: pub 
+      - /benchmark_echo: sub 
+  listener: 
+    topics:
+      - /benchmark: sub 
+      - /benchmark_echo: pub 
+
+# name: state
+# name need to match the identitifer's whoami
+# state should be declared in possible states 
+# Phase 1: only allow changing the assignment at runtime 
+assignment:
+  machine_talker: talker
+  machine_listener: listener
+
+topology:
+  machine_talker:
+    children: 
+      - machine_listener
