@@ -34,7 +34,7 @@ class MinimalPublisher(Node):
 
     def listener_callback(self, msg):
         self.logger.error(f"Latency: {str(payload_to_latency(msg.data))}")
-        self.logger.info(f"{payload_to_latency(msg.data)}")
+        # self.logger.info(f"{payload_to_latency(msg.data)}")
 
 
 def main(args=None):
