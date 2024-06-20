@@ -1,13 +1,13 @@
 use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
 use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
-use crate::network::kcp::reader_and_writer;
+use crate::network::udp::reader_and_writer;
 use crate::network::udp::get_socket_stun;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
 use fogrs_common::packet_structs::{
     generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GDPPacket,
 };
-use fogrs_kcp::{KcpConfig, KcpListener, KcpStream};
+use fogrs_kcp::KcpListener;
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
 use redis_async::client;
@@ -21,6 +21,8 @@ use std::vec;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it out
                                                              // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
+
+const transmission_protocol: &str = "kcp";
 
 fn flip_direction(direction: &str) -> Option<String> {
     let mapping = [
@@ -133,20 +135,39 @@ pub async fn register_stream_sender(
                     let receiver_socket_addr: SocketAddr = receiver_addr
                         .parse()
                         .expect("Failed to parse receiver address");
-                    // let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-                    // let _ = stream.connect(receiver_socket_addr).await;
-                    let config = KcpConfig::default();
-                    let stream = KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
-                    info!("connected to {:?}", receiver_socket_addr);
+                    let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+                    if transmission_protocol == "kcp" {
+                        let config = fogrs_kcp::KcpConfig::default();
+                        let _ = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
+                        info!("connected to {:?}", receiver_socket_addr);
+                    } else if transmission_protocol == "udp" {
+                        let _ = stream.connect(receiver_socket_addr).await;
+                    }
+                    // let config = KcpConfig::default();
+                    // let stream = KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
+                    // info!("connected to {:?}", receiver_socket_addr);
                     let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                     let fib_clone = fib_tx.clone();
                     tokio::spawn(async move {
-                        reader_and_writer(
-                            stream,
-                            fib_clone,
-                            // ebpf_tx,
-                            local_to_net_rx,
-                        ).await;
+                        if transmission_protocol == "kcp" {
+                            let config = fogrs_kcp::KcpConfig::default();
+                            let stream = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
+                            info!("connected to {:?}", receiver_socket_addr);
+                            crate::network::kcp::reader_and_writer(
+                                stream,
+                                fib_clone,
+                                // ebpf_tx,
+                                local_to_net_rx,
+                            ).await;
+                        } else if transmission_protocol == "udp" {
+                            let _ = stream.connect(receiver_socket_addr).await;
+                            crate::network::udp::reader_and_writer(
+                                stream,
+                                fib_clone,
+                                // ebpf_tx,
+                                local_to_net_rx,
+                            ).await;
+                        }
                     });
                     // send to fib an update
                     let channel_update_msg = FibStateChange {
@@ -206,11 +227,6 @@ pub async fn receiver_registration_handler(
         let sock_public_addr = get_socket_stun(&stream).await.unwrap();
         info!("UDP socket is bound to {:?}", sock_public_addr);
 
-        // convert udp socket stream to kcpstream
-        let config = fogrs_kcp::KcpConfig::default();
-        let mut listener = KcpListener::from_socket(config, stream).await.unwrap();
-        info!("KCP listener is bound to {:?}", sock_public_addr);
-
         let fib_tx_clone = fib_tx.clone();
         let channel_tx_clone = channel_tx.clone();
         let receiver_key_name = receiver_key_name.clone();
@@ -250,15 +266,23 @@ pub async fn receiver_registration_handler(
 
             let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
             tokio::spawn(async move {
-                let (stream, peer_addr) = match listener.accept().await {
-                    Ok(s) => s,
-                    Err(err) => {
-                        error!("accept failed, error: {}", err);
-                        return;
-                    }
-                };
-                info!("accepted {}", peer_addr);
-                reader_and_writer(stream, fib_tx_clone, local_to_net_rx).await;
+                if transmission_protocol == "kcp" {
+                    let config = fogrs_kcp::KcpConfig::default();
+                    let mut listener = KcpListener::from_socket(config, stream).await.unwrap();
+                    info!("KCP listener is bound to {:?}", sock_public_addr);    
+                    let (stream, peer_addr) = match listener.accept().await {
+                        Ok(s) => s,
+                        Err(err) => {
+                            error!("accept failed, error: {}", err);
+                            return;
+                        }
+                    };
+                    info!("accepted {}", peer_addr);
+                    crate::network::kcp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx).await; 
+                } else{
+                    crate::network::udp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx).await;
+                }
+                
             });
             let channel_update_msg = FibStateChange {
                 action: FibChangeAction::ADD,
