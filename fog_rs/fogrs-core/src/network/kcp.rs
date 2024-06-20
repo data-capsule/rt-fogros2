@@ -188,7 +188,18 @@ pub async fn reader_and_writer(
                 // stream.write_all(&packet.payload[..packet.payload.len()]).await.unwrap();
                 if let Some(payload) = pkt_to_forward.payload {
                     info!("the payload length is {}", payload.len());
-                    stream.write_all(&payload[..payload.len()]).await.unwrap();
+                    // stream.write_all(&payload[..payload.len()]).await.unwrap();
+                    let mut bytes_written = 0;
+                    let bytes_to_write = payload.len();
+                    while bytes_written < bytes_to_write {
+                        if bytes_to_write - bytes_written > UDP_BUFFER_SIZE {
+                            stream.write_all(&payload[bytes_written..bytes_written + UDP_BUFFER_SIZE]).await.unwrap();
+                            bytes_written += UDP_BUFFER_SIZE;
+                        } else {
+                            stream.write_all(&payload[bytes_written..bytes_to_write]).await.unwrap();
+                            bytes_written = bytes_to_write;
+                        }
+                    }
                 }
 
                 if let Some(name_record) = pkt_to_forward.name_record {
