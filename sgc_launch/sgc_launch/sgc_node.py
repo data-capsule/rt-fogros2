@@ -209,7 +209,7 @@ class SGC_Router_Node(rclpy.node.Node):
         logger.info("building SGC router...")
         if release_mode:
             subprocess.call(
-                f"cargo build --release --manifest-path {sgc_path}/Cargo.toml",
+                f"RUSTFLAGS=\"--cfg tokio_unstable\" cargo build --release --manifest-path {sgc_path}/Cargo.toml",
                 env=current_env,
                 shell=True,
             )
