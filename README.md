@@ -2,6 +2,27 @@
 
 FogROS2-SGC is a cloud robotics platform for connecting disjoint ROS2 networks across different physical locations, networks, and Data Distribution Services. 
 
+```
+
+
+docker build -t dev-fr .
+docker run -ti --net=host -v .:/fog_ws/rt-fogros2  dev-fr bash  
+
+docker build --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)  -t dev-fr . && docker run -ti --net=host -v ~/rt-fogros2:/fog_ws/rt-fogros2  dev-fr bash 
+
+
+sudo chmod -R 755 crypto/
+
+docker build --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) --build-arg USER_NAME="$USER"  -t dev-fr .
+docker run --user $(id -u):$(id -g) -ti --net=host -v ~/rt-fogros2:/fog_ws/rt-fogros2  dev-fr bash 
+
+export ROS_DOMAIN_ID=3 && source install/setup.bash && ros2 launch sgc_launch add.three.ints.service.launch.py 
+export ROS_DOMAIN_ID=2 && source install/setup.bash && ros2 launch sgc_launch add.three.ints.client.launch.py 
+
+
+
+```
+
 \[[Website](https://sites.google.com/view/fogros2-sgc)\] \[[Video](https://youtu.be/hVVFVGLcK0c)\] \[[Arxiv](https://arxiv.org/abs/2306.17157)\]
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
