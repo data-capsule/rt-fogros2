@@ -1,63 +1,15 @@
 use crate::logger::{handle_logs, Logger};
-use crate::structs::{GDPName, GDPPacket, GdpAction};
 use chrono;
-use serde::{Deserialize, Serialize};
+use fogrs_common::fib_structs::{
+    FIBState, FibChangeAction, FibConnection, FibConnectionType, FibStateChange, TopicStateInFIB,
+};
+use fogrs_common::packet_structs::{GDPName, GDPPacket, GdpAction};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::SystemTime;
-use tokio::fs::File;
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt; // for write_all()
+// for write_all()
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum FibChangeAction {
-    ADD,
-    PAUSE,    // pausing the forwarding of the topic, keeping connections alive
-    PAUSEADD, // adding the entry to FIB, but keeps it paused
-    RESUME,   // resume a paused topic
-    DELETE,   // deleting a local topic interface and all its connections
-    STATE,    // save the state of the topic
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum FibConnectionType {
-    REQUEST,
-    RESPONSE,
-    SENDER,
-    RECEIVER,
-    BIDIRECTIONAL,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
-pub enum TopicStateInFIB {
-    RUNNING,
-    PAUSED,
-    DELETED,
-}
-
-#[derive(Debug)]
-pub struct FibStateChange {
-    pub action: FibChangeAction,
-    pub connection_type: FibConnectionType,
-    pub topic_gdp_name: GDPName,
-    pub forward_destination: Option<UnboundedSender<GDPPacket>>,
-    pub description: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct FibConnection {
-    pub state: TopicStateInFIB,
-    pub connection_type: FibConnectionType,
-    tx: UnboundedSender<GDPPacket>,
-    pub description: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct FIBState {
-    pub receivers: Vec<FibConnection>,
-}
+use tokio::sync::mpsc::UnboundedReceiver;
 
 /// receive, check, and route GDP messages
 ///
@@ -99,7 +51,8 @@ pub async fn service_connection_fib_handler(
                             Some(s) => {
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
-                                        let _ = dst.tx.send(pkt.clone());
+                                        info!("forwarding to {:?}", dst.description);
+                                        dst.tx.send(pkt.clone()).unwrap();
                                     } else {
                                         warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
                                     }
@@ -162,16 +115,6 @@ pub async fn service_connection_fib_handler(
                                     error!("The gdpname {:?} does not exist", pkt.gdpname)
                                 }
                             }
-                            // send it back with response forwarding table
-                            // let dst = response_forwarding_table.get(&pkt.gdpname);
-                            // match dst {
-                            //     Some(v) => {
-                            //         let _ = v.send(pkt.clone());
-                            //     },
-                            //     None => {
-                            //         error!("the response channel does not exist");
-                            //     }
-                            // }
                         }
                     },
 
@@ -183,17 +126,13 @@ pub async fn service_connection_fib_handler(
 
             }
 
-
             // update the table
             Some(update) = channel_rx.recv() => {
                 match update.action {
                     FibChangeAction::ADD => {
                         info!("update status received {:?}", update);
-
                         match  rib_state_table.get_mut(&update.topic_gdp_name) {
                             Some(v) => {
-                                // v.state = TopicStateInFIB::RUNNING;
-                                // v.receivers.push(update.forward_destination.unwrap());
                                 info!("local topic interface {:?} is added", update);
                                 v.receivers.push(FibConnection{
                                     state: TopicStateInFIB::RUNNING,
@@ -201,14 +140,9 @@ pub async fn service_connection_fib_handler(
                                     tx: update.forward_destination.unwrap(),
                                     description: update.description,
                                 });
-
                             }
                             None =>{
                                 info!("Creating a new entry of {:?}", update);
-                                // let state = FIBState {
-                                //     state: TopicStateInFIB::RUNNING,
-                                //     receivers: vec!(update.forward_destination.unwrap()),
-                                // };
                                 let state = FIBState {
                                     receivers: vec!(FibConnection{
                                         state: TopicStateInFIB::RUNNING,
@@ -223,57 +157,11 @@ pub async fn service_connection_fib_handler(
                                 );
                             }
                         };
-                        // TODO: pause add
                     },
-                    FibChangeAction::STATE => {
-
-                    },
-                    // FibChangeAction::RESPONSE => {
-                    //     info!("Response channel received {:?}", update);
-                    //     // insert the response channel
-                    //     response_forwarding_table.insert(update.topic_gdp_name, update.forward_destination.unwrap());
-                    // }
-                    FibChangeAction::PAUSE => todo!(),
-                    FibChangeAction::PAUSEADD => todo!(),
-                    FibChangeAction::RESUME => todo!(),
-                    FibChangeAction::DELETE => todo!(),
-                    // FibChangeAction::PAUSEADD => {
-                    //     //todo pause
-                    // },
-                    // FibChangeAction::PAUSE => {
-                    //     info!("Pausing GDP Name {:?}", update.topic_gdp_name);
-                    //     match  rib_state_table.get_mut(&update.topic_gdp_name) {
-                    //         Some(v) => {
-                    //             v.state = TopicStateInFIB::PAUSED;
-                    //         }
-                    //         None =>{
-                    //             error!("pausing non existing state!");
-                    //         }
-                    //     };
-                    // },
-                    // FibChangeAction::RESUME => {
-                    //     info!("Deleting GDP Name {:?}", update.topic_gdp_name);
-                    //     match  rib_state_table.get_mut(&update.topic_gdp_name) {
-                    //         Some(v) => {
-                    //             v.state = TopicStateInFIB::RUNNING;
-                    //         }
-                    //         None =>{
-                    //             error!("resuming non existing state!");
-                    //         }
-                    //     };
-                    // },
-                    // FibChangeAction::DELETE => {
-                    //     info!("Deleting GDP Name {:?}", update.topic_gdp_name);
-                    //     // rib_state_table.remove(&update.topic_gdp_name);
-                    //     match  rib_state_table.get_mut(&update.topic_gdp_name) {
-                    //         Some(v) => {
-                    //             v.state = TopicStateInFIB::DELETED;
-                    //         }
-                    //         None =>{
-                    //             error!("deleting non existing state!");
-                    //         }
-                    //     };
-                    // },
+                    _ => {
+                        error!("Unknown action {:?}", update.action);
+                        continue;
+                    }
                 }
             }
         }

@@ -1,4 +1,4 @@
-use fogrs_common::packet_structs::{GDPChannel, GDPName, GDPNameRecord, GDPPacket, GdpAction};
+use crate::packet_structs::{GDPChannel, GDPName, GDPNameRecord, GDPPacket, GdpAction};
 use tokio::sync::mpsc::UnboundedSender;
 
 /// construct gdp struct from bytes

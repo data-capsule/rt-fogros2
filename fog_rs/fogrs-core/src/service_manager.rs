@@ -2,7 +2,7 @@ use crate::api_server::ROSTopicRequest;
 
 
 use crate::routing_manager::RoutingManager;
-use crate::service_request_manager_udp::service_connection_fib_handler;
+use crate::service_request_manager::service_connection_fib_handler;
 use fogrs_common::fib_structs::FibChangeAction;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::packet_structs::{get_gdp_name_from_topic, GDPName};
