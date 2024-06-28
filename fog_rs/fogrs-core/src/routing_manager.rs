@@ -1,6 +1,5 @@
 use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
 use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
-use crate::network::udp::reader_and_writer;
 use crate::network::udp::get_socket_stun;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
@@ -269,7 +268,7 @@ pub async fn receiver_registration_handler(
                 if transmission_protocol == "kcp" {
                     let config = fogrs_kcp::KcpConfig::default();
                     let mut listener = KcpListener::from_socket(config, stream).await.unwrap();
-                    info!("KCP listener is bound to {:?}", sock_public_addr);    
+                    info!("KCP listener is bound to {:?}", sock_public_addr);
                     let (stream, peer_addr) = match listener.accept().await {
                         Ok(s) => s,
                         Err(err) => {
@@ -278,11 +277,12 @@ pub async fn receiver_registration_handler(
                         }
                     };
                     info!("accepted {}", peer_addr);
-                    crate::network::kcp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx).await; 
-                } else{
-                    crate::network::udp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx).await;
+                    crate::network::kcp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx)
+                        .await;
+                } else {
+                    crate::network::udp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx)
+                        .await;
                 }
-                
             });
             let channel_update_msg = FibStateChange {
                 action: FibChangeAction::ADD,

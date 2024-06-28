@@ -394,4 +394,3 @@ pub fn construct_rib_query_from_bytes(
         name_record: Some(name_record),
     }
 }
-
