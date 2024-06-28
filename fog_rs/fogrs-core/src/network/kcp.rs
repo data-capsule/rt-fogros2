@@ -1,4 +1,4 @@
-use crate::pipeline::construct_gdp_packet_with_guid;
+use fogrs_common::packet_structs::construct_gdp_packet_with_guid;
 use fogrs_common::packet_structs::GDPHeaderInTransit;
 use fogrs_common::packet_structs::GDPName;
 use fogrs_common::packet_structs::{GDPPacket, GdpAction, Packet};
