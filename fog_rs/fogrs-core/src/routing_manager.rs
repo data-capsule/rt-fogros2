@@ -9,6 +9,7 @@ use fogrs_common::packet_structs::{
     generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GDPPacket,
 };
 use fogrs_kcp::KcpListener;
+use fogrs_kcp::to_kcp_config;
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
 use redis_async::client;
@@ -487,7 +488,8 @@ impl RoutingManager {
                     let topic_name = request.topic_name.clone();
                     let topic_type = request.topic_type.clone();
                     let certificate = request.certificate.clone();
-                    let config = fogrs_kcp::KcpConfig::default();
+                    let topic_qos = request.topic_qos.clone();
+                    let config = to_kcp_config(topic_qos.as_str());
                     let interface = get_default_interface_name().unwrap();
 
                     let topic_gdp_name = GDPName(get_gdp_name_from_topic(
@@ -553,13 +555,14 @@ impl RoutingManager {
                         let topic_name = request.topic_name.clone();
                         let topic_type = request.topic_type.clone();
                         let certificate = request.certificate.clone();
+                        let topic_qos = request.topic_qos.clone();
                         let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                             &topic_name,
                             &topic_type,
                             &certificate,
                         ));
 
-                        let config = fogrs_kcp::KcpConfig::default();
+                        let config = to_kcp_config(topic_qos.as_str());
                         let interface = get_default_interface_name().unwrap();                
 
                         warn!(

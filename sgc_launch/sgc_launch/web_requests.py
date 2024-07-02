@@ -20,7 +20,7 @@ def send_topic_request(
     uri = f"http://{machine_address}/topic"
     # Create a new resource
     response = requests.post(uri, json=ros_topic)
-    # print(f"topic {topic.name} with operation {api_op} request sent with response {response}")
+    print(f"topic {topic_name} with operation {api_op} request sent with response {response}")
 
 
 def send_service_request(
@@ -40,4 +40,4 @@ def send_service_request(
     uri = f"http://{machine_address}/service"
     # Create a new resource
     response = requests.post(uri, json=ros_topic)
-    # print(f"topic {topic.name} with operation {api_op} request sent with response {response}")
+    print(f"topic {topic_name} with operation {api_op} request sent with response {response}")

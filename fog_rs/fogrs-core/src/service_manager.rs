@@ -207,6 +207,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                         let topic_name = payload.topic_name;
                         let topic_type = payload.topic_type;
                         let action = payload.ros_op;
+                        let qos = payload.topic_qos.expect("QoS is required for routing");
 
                         match action.as_str() {
 
@@ -216,6 +217,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     action: FibChangeAction::ADD,
                                     topic_name: topic_name,
                                     topic_type: topic_type,
+                                    topic_qos: qos,
                                     certificate: certificate.clone(),
                                     connection_type: Some(payload.connection_type.unwrap()),
                                     communication_url: Some(payload.forward_sender_url.unwrap()),
@@ -228,6 +230,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     action: FibChangeAction::ADD,
                                     topic_name: topic_name,
                                     topic_type: topic_type,
+                                    topic_qos: qos,
                                     certificate: certificate.clone(),
                                     connection_type: Some(payload.connection_type.unwrap()),
                                     communication_url: Some(payload.forward_receiver_url.unwrap()),
@@ -239,6 +242,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     action: FibChangeAction::ADD,
                                     topic_name: topic_name,
                                     topic_type: topic_type,
+                                    topic_qos: qos,
                                     certificate: certificate.clone(),
                                     connection_type: Some(payload.connection_type.unwrap()),
                                     communication_url: Some(payload.forward_sender_url.unwrap()),
@@ -251,6 +255,7 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     action: FibChangeAction::ADD,
                                     topic_name: topic_name,
                                     topic_type: topic_type,
+                                    topic_qos: qos,
                                     certificate: certificate.clone(),
                                     connection_type: Some(payload.connection_type.unwrap()),
                                     communication_url: Some(payload.forward_receiver_url.unwrap()),

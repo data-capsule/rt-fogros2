@@ -248,7 +248,10 @@ class SGC_Swarm:
             return
         for topic in config["topics"]:
             self.topic_dict[topic["topic_name"]] = topic["topic_type"]
-            self.topic_qos_dict[topic["topic_name"]] = topic["qos"]
+            if "qos" in topic:
+                self.topic_qos_dict[topic["topic_name"]] = topic["qos"]
+            else:
+                self.topic_qos_dict[topic["topic_name"]] = "default"
 
     def _load_services(self, config):
         if "services" not in config:

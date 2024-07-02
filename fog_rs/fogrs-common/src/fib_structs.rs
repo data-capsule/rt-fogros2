@@ -14,6 +14,7 @@ pub struct RoutingManagerRequest {
     pub action: FibChangeAction,
     pub topic_name: String,
     pub topic_type: String,
+    pub topic_qos: String,
     pub certificate: Vec<u8>,
     pub connection_type: Option<String>,
     pub communication_url: Option<String>,
