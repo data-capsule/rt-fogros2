@@ -24,6 +24,7 @@ use tokio::sync::mpsc::{self};
 use std::os::unix::io::AsRawFd;
 use libc::{setsockopt, c_int, c_void, c_char, SOL_SOCKET, SO_BINDTODEVICE};
 use std::ffi::CString;
+use pnet::datalink::{self, NetworkInterface};
 
 const transmission_protocol: &str = "kcp";
 
@@ -47,6 +48,22 @@ fn flip_direction(direction: &str) -> Option<String> {
         }
     }
     panic!("Invalid direction {:?}", direction);
+}
+
+
+
+fn get_ip_address(interface_name: &str) -> Option<SocketAddr> {
+    let interfaces = datalink::interfaces();
+    for interface in interfaces {
+        if interface.name == interface_name {
+            for ip in interface.ips {
+                if let std::net::IpAddr::V4(ipv4) = ip.ip() {
+                    return Some(SocketAddr::new(ip.ip(), 0));
+                }
+            }
+        }
+    }
+    None
 }
 
 
@@ -159,10 +176,10 @@ pub async fn register_stream_sender(
                     let receiver_socket_addr: SocketAddr = receiver_addr
                         .parse()
                         .expect("Failed to parse receiver address");
+
                     let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
-                   
-                    let default_interface = default_net::interface::get_default_interface_name().unwrap();
+                    let default_interface = "wg0".to_string(); //default_net::interface::get_default_interface_name().unwrap();
 
                     info!("binding to interface {}", default_interface);
 
@@ -256,13 +273,16 @@ pub async fn receiver_registration_handler(
 
         let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
-        let default_interface = default_net::interface::get_default_interface_name().unwrap();
+        let default_interface = "wg0".to_string(); //default_net::interface::get_default_interface_name().unwrap();
 
         info!("binding to interface {}", default_interface);
 
         bind_to_interface(&stream, default_interface.as_str()).expect("Cannot bind to interface");
 
-        let sock_public_addr = get_socket_stun(&stream).await.unwrap();
+        // let sock_public_addr = get_socket_stun(&stream).await.unwrap();
+        let mut sock_public_addr = get_ip_address(default_interface.as_str()).unwrap(); //stream.local_addr().unwrap();
+        sock_public_addr.set_port(stream.local_addr().unwrap().port());
+
         info!("UDP socket is bound to {:?}", sock_public_addr);
 
         let fib_tx_clone = fib_tx.clone();
