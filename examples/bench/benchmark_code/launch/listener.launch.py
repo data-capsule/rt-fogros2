@@ -55,7 +55,7 @@ def generate_launch_description():
             # or use the `config_path` optional parameter
             {"config_file_name": "talker-listener.yaml"}, 
             {"whoami": "machine_listener"}, 
-            {"release_mode": False}
+            {"release_mode": True}
         ]
     )
     ld.add_action(sgc_router)

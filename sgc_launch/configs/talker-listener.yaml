@@ -14,6 +14,7 @@ identifiers:
 topics:
   - topic_name: /chatter
     topic_type: std_msgs/msg/String
+    qos: fast # what ??? 
 
 # declare possible states 
 # pub: publish to the swarm
