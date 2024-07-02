@@ -1,6 +1,8 @@
 use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
 use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use crate::network::udp::get_socket_stun;
+use default_net::get_default_interface;
+use default_net::interface::get_default_interface_name;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
 use fogrs_common::packet_structs::{
@@ -101,6 +103,8 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
+    interface: &str, 
+    config: fogrs_kcp::KcpConfig,
 ) {
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
@@ -179,27 +183,19 @@ pub async fn register_stream_sender(
 
                     let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
-                    let default_interface = "wg0".to_string(); //default_net::interface::get_default_interface_name().unwrap();
-
-                    info!("binding to interface {}", default_interface);
-
-                    bind_to_interface(&stream, default_interface.as_str()).expect("Cannot bind to interface");
+                    bind_to_interface(&stream, interface).expect("Cannot bind to interface");
 
                     if transmission_protocol == "kcp" {
-                        let config = fogrs_kcp::KcpConfig::default();
                         let _ = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
                         info!("connected to {:?}", receiver_socket_addr);
                     } else if transmission_protocol == "udp" {
                         let _ = stream.connect(receiver_socket_addr).await;
                     }
-                    // let config = KcpConfig::default();
-                    // let stream = KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
-                    // info!("connected to {:?}", receiver_socket_addr);
+
                     let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                     let fib_clone = fib_tx.clone();
                     tokio::spawn(async move {
                         if transmission_protocol == "kcp" {
-                            let config = fogrs_kcp::KcpConfig::default();
                             let stream = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
                             info!("connected to {:?}", receiver_socket_addr);
                             crate::network::kcp::reader_and_writer(
@@ -255,6 +251,8 @@ pub async fn receiver_registration_handler(
     topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String,
     fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
     processed_senders: &mut Vec<String>,
+    interface: &str,
+    config: fogrs_kcp::KcpConfig,
 ) {
     let redis_url = get_redis_url();
 
@@ -273,15 +271,18 @@ pub async fn receiver_registration_handler(
 
         let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
 
-        let default_interface = "wg0".to_string(); //default_net::interface::get_default_interface_name().unwrap();
+        bind_to_interface(&stream, interface).expect("Cannot bind to interface");
 
-        info!("binding to interface {}", default_interface);
+        let sock_public_addr = match  get_socket_stun(&stream).await {
+            Ok(addr) => addr,
+            Err(err) => {
+                let mut pnet_addr =  get_ip_address(interface).unwrap();
+                pnet_addr.set_port(stream.local_addr().unwrap().port());
+                warn!("Failed to get public address from stun, error: {}, using pnet addr {}", err, pnet_addr);
+                pnet_addr
+            }
+        };
 
-        bind_to_interface(&stream, default_interface.as_str()).expect("Cannot bind to interface");
-
-        // let sock_public_addr = get_socket_stun(&stream).await.unwrap();
-        let mut sock_public_addr = get_ip_address(default_interface.as_str()).unwrap(); //stream.local_addr().unwrap();
-        sock_public_addr.set_port(stream.local_addr().unwrap().port());
 
         info!("UDP socket is bound to {:?}", sock_public_addr);
 
@@ -325,7 +326,6 @@ pub async fn receiver_registration_handler(
             let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
             tokio::spawn(async move {
                 if transmission_protocol == "kcp" {
-                    let config = fogrs_kcp::KcpConfig::default();
                     let mut listener = KcpListener::from_socket(config, stream).await.unwrap();
                     info!("KCP listener is bound to {:?}", sock_public_addr);
                     let (stream, peer_addr) = match listener.accept().await {
@@ -363,6 +363,8 @@ pub async fn receiver_registration_handler(
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
+    interface: &str,
+    config: fogrs_kcp::KcpConfig,
 ) {
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
@@ -398,7 +400,6 @@ pub async fn register_stream_receiver(
         "get a list of senders from KVS {:?}",
         current_value_under_key
     );
-    // info!("Redis configuration: notify-keyspace-events = {}", get_redis_config_value("notify-keyspace-events").unwrap());
 
     let mut processed_senders = vec![];
 
@@ -410,6 +411,8 @@ pub async fn register_stream_receiver(
         fib_tx.clone(),
         channel_tx.clone(),
         &mut processed_senders,
+        interface,
+        config,
     )
     .await;
 
@@ -429,6 +432,8 @@ pub async fn register_stream_receiver(
                     fib_tx.clone(),
                     channel_tx.clone(),
                     &mut processed_senders,
+                    interface,
+                    config,
                 ).await;
             }
 
@@ -441,6 +446,8 @@ pub async fn register_stream_receiver(
                     fib_tx.clone(),
                     channel_tx.clone(),
                     &mut processed_senders,
+                    interface,
+                    config,
                 ).await;
             }
         }
@@ -480,6 +487,9 @@ impl RoutingManager {
                     let topic_name = request.topic_name.clone();
                     let topic_type = request.topic_type.clone();
                     let certificate = request.certificate.clone();
+                    let config = fogrs_kcp::KcpConfig::default();
+                    let interface = get_default_interface_name().unwrap();
+
                     let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                         &topic_name,
                         &topic_type,
@@ -501,6 +511,8 @@ impl RoutingManager {
                             direction,
                             fib_tx.clone(),
                             channel_tx_clone,
+                            interface.as_str(),
+                            config,
                         )
                         .await;
                     });
@@ -547,6 +559,9 @@ impl RoutingManager {
                             &certificate,
                         ));
 
+                        let config = fogrs_kcp::KcpConfig::default();
+                        let interface = get_default_interface_name().unwrap();                
+
                         warn!(
                             "receiver_network_routing_thread_manager {:?}",
                             connection_type
@@ -561,6 +576,8 @@ impl RoutingManager {
                             direction,
                             fib_tx.clone(),
                             channel_tx_clone,
+                            interface.as_str(),
+                            config,
                         )
                         .await;
                         warn!("receiver_network_routing_thread_manager {:?} finished", connection_type);
@@ -578,13 +595,9 @@ impl RoutingManager {
                         let _ = channel_tx.send(channel_update_msg);
                         info!("remote sender sent channel update message");
 
-
-
                     }));
                 }
-                // _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
-                //     info!("waiting for request message");
-                // }
+
             }
         }
     }

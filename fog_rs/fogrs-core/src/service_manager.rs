@@ -271,5 +271,4 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
         }
     }
 
-    futures::future::try_join_all(waiting_handles).await;
 }
