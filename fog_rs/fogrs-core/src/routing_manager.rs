@@ -21,6 +21,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it
                                                              // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
 
+use std::os::unix::io::AsRawFd;
+use libc::{setsockopt, c_int, c_void, c_char, SOL_SOCKET, SO_BINDTODEVICE};
+use std::ffi::CString;
+
 const transmission_protocol: &str = "kcp";
 
 fn flip_direction(direction: &str) -> Option<String> {
@@ -43,6 +47,27 @@ fn flip_direction(direction: &str) -> Option<String> {
         }
     }
     panic!("Invalid direction {:?}", direction);
+}
+
+
+fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()> {
+    let cstr = CString::new(interface).unwrap();
+    let fd = socket.as_raw_fd();
+    let ret = unsafe {
+        setsockopt(
+            fd,
+            SOL_SOCKET,
+            SO_BINDTODEVICE,
+            cstr.as_ptr() as *const c_void,
+            (cstr.to_bytes_with_nul().len() as c_int).try_into().unwrap(),
+        )
+    };
+
+    if ret != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    Ok(())
 }
 
 
@@ -135,6 +160,14 @@ pub async fn register_stream_sender(
                         .parse()
                         .expect("Failed to parse receiver address");
                     let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+
+                   
+                    let default_interface = default_net::interface::get_default_interface_name().unwrap();
+
+                    info!("binding to interface {}", default_interface);
+
+                    bind_to_interface(&stream, default_interface.as_str()).expect("Cannot bind to interface");
+
                     if transmission_protocol == "kcp" {
                         let config = fogrs_kcp::KcpConfig::default();
                         let _ = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
@@ -222,6 +255,12 @@ pub async fn receiver_registration_handler(
         // put value {IP_address} to key {[sender-receiver]}
 
         let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+
+        let default_interface = default_net::interface::get_default_interface_name().unwrap();
+
+        info!("binding to interface {}", default_interface);
+
+        bind_to_interface(&stream, default_interface.as_str()).expect("Cannot bind to interface");
 
         let sock_public_addr = get_socket_stun(&stream).await.unwrap();
         info!("UDP socket is bound to {:?}", sock_public_addr);
