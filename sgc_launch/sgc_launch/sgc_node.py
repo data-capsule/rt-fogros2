@@ -242,7 +242,7 @@ class SGC_Router_Node(rclpy.node.Node):
         #     subprocess.Popen(f"{sgc_path}/target/release/gdp-router router", env=current_env,  shell=True)
 
         if not self.automatic_mode:
-            sleep(10)
+            sleep(5)
             self.swarm.apply_assignment(
                 self.swarm.get_assignment_from_yaml(config_path)
             )
