@@ -75,7 +75,7 @@ pub async fn service_connection_fib_handler(
                         match topic_state {
                             Some(s) => {
                                 for dst in &s.receivers {
-                                    if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
+                                    if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUESTRECEIVER {
                                         request_latency_table.insert(pkt.gdpname, SystemTime::now());
                                         let _ = dst.tx.send(pkt.clone());
                                         logger.log(format!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
@@ -104,7 +104,7 @@ pub async fn service_connection_fib_handler(
                             match topic_state {
                                 Some(s) => {
                                     for dst in &s.receivers {
-                                        if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
+                                        if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RESPONSERECEIVER {
                                             let _ = dst.tx.send(pkt.clone());
                                         } else {
                                             warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);

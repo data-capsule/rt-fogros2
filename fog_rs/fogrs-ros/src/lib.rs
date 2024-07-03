@@ -312,7 +312,7 @@ impl ROSManager {
 
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
-                        connection_type: FibConnectionType::REQUEST,
+                        connection_type: FibConnectionType::REQUESTRECEIVER,
                         topic_gdp_name: topic_gdp_name,
                         forward_destination: Some(ros_tx),
                         description: Some("ros service request".to_string()),
@@ -425,7 +425,7 @@ impl ROSManager {
     
                         let channel_update_msg = FibStateChange {
                             action: FibChangeAction::ADD,
-                            connection_type: FibConnectionType::RESPONSE,
+                            connection_type: FibConnectionType::RESPONSERECEIVER,
                             topic_gdp_name: topic_gdp_name,
                             forward_destination: Some(ros_tx),
                             description: Some("ros service response".to_string()),

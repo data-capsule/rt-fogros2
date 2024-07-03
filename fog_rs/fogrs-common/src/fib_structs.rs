@@ -82,11 +82,12 @@ pub enum FibChangeAction {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]
 pub enum FibConnectionType {
-    REQUEST,
-    RESPONSE,
     SENDER,
     RECEIVER,
-    BIDIRECTIONAL,
+    REQUESTSENDER,
+    REQUESTRECEIVER,
+    RESPONSESENDER,
+    RESPONSERECEIVER,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Hash)]

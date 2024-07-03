@@ -31,14 +31,16 @@ use pnet::datalink::{self, NetworkInterface};
 const transmission_protocol: &str = "kcp";
 
 
-fn connection_type_str_to_connection_type(
+fn direction_str_to_connection_type(
     connection_type: &str,
 ) -> FibConnectionType {
     match connection_type.to_uppercase().as_str() {
         "SENDER"  => FibConnectionType::SENDER,
         "RECEIVER" => FibConnectionType::RECEIVER,
-        "REQUEST" => FibConnectionType::REQUEST,
-        "RESPONSE" => FibConnectionType::RESPONSE,
+        "REQUEST-SENDER" => FibConnectionType::REQUESTSENDER,
+        "REQUEST-RECEIVER" => FibConnectionType::REQUESTRECEIVER,
+        "RESPONSE-SENDER" => FibConnectionType::RESPONSESENDER,
+        "RESPONSE-RECEIVER" => FibConnectionType::RESPONSERECEIVER,
         _ => panic!("Invalid connection type {:?}", connection_type),
     }
 }
@@ -46,20 +48,20 @@ fn connection_type_str_to_connection_type(
 
 fn flip_direction(direction: &str) -> Option<String> {
     let mapping = [
-        ("REQUEST-receiver", "REQUEST-sender"),
-        ("RESPONSE-sender", "RESPONSE-receiver"),
-        ("REQUEST-sender", "REQUEST-receiver"),
-        ("RESPONSE-receiver", "RESPONSE-sender"),
+        ("request-receiver", "request-sender"),
+        ("request-sender", "request-receiver"),
+        ("response-sender", "response-receiver"),
+        ("response-receiver", "response-sender"),
         // ("pub-receiver", "sub-sender"),
         // ("sub-sender", "pub-receiver"),
         // ("pub-sender", "sub-receiver"),
         // ("sub-receiver", "pub-sender"),
-        ("SENDER-sender", "RECEIVER-receiver"),
-        ("RECEIVER-receiver", "SENDER-sender"),
+        ("sender-sender", "receiver-receiver"),
+        ("receiver-receiver", "sender-sender"),
     ];
     info!("direction {:?}", direction);
     for (k, v) in mapping.iter() {
-        if k == &direction {
+        if k == &direction.to_lowercase() {
             return Some(v.to_string());
         }
     }
@@ -234,7 +236,10 @@ pub async fn register_stream_sender(
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
                         topic_gdp_name: topic_gdp_name,
-                        connection_type: FibConnectionType::RECEIVER, // it connects to a remote receiver
+                        // here is a little bit tricky: 
+                        //  to fib, it is the receiver
+                        // it connects to a remote receiver
+                        connection_type: direction_str_to_connection_type(flip_direction(direction).unwrap().as_str()), 
                         forward_destination: Some(local_to_net_tx),
                         description: Some(format!(
                             "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
@@ -366,7 +371,11 @@ pub async fn receiver_registration_handler(
             let channel_update_msg = FibStateChange {
                 action: FibChangeAction::ADD,
                 topic_gdp_name: topic_gdp_name,
-                connection_type: FibConnectionType::SENDER, // it connects from a remote sender
+                // connection_type: direction_str_to_connection_type(direction.as_str()), // it connects from a remote sender
+                // here is a little bit tricky: 
+                //  to fib, it is the receiver
+                // it connects to a remote receiver
+                connection_type: direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()), 
                 forward_destination: Some(local_to_net_tx),
                 description: Some(format!(
                     "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} direction {:?}",
@@ -512,7 +521,11 @@ impl RoutingManager {
                     let topic_qos = request.topic_qos.clone();
                     let config = to_kcp_config(topic_qos.as_str());
                     let interface = get_default_interface_name().unwrap();
-                    let connection_type = connection_type_str_to_connection_type(&request.connection_type.unwrap());
+                    let direction = format!("{}-{}", request.connection_type.unwrap(), "sender");
+                    let connection_type = direction_str_to_connection_type(
+                        direction.as_str()
+                    );
+
 
                     let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                         &topic_name,
@@ -528,7 +541,6 @@ impl RoutingManager {
                     let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                     let channel_tx_clone = channel_tx.clone();
                     tokio::spawn(async move {
-                        let direction = format!("{:?}-{}", connection_type, "sender");
 
                         register_stream_sender(
                             topic_gdp_name,
@@ -582,7 +594,10 @@ impl RoutingManager {
                             &topic_type,
                             &certificate,
                         ));
-                        let connection_type = connection_type_str_to_connection_type(&request.connection_type.unwrap());
+                        let direction = format!("{}-{}", request.connection_type.unwrap(), "receiver");
+                        let connection_type = direction_str_to_connection_type(
+                            direction.as_str()
+                        );
 
                         let config = to_kcp_config(topic_qos.as_str());
                         let interface = get_default_interface_name().unwrap();                
@@ -595,7 +610,6 @@ impl RoutingManager {
                         let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                         let channel_tx_clone = channel_tx.clone();
 
-                        let direction = format!("{:?}-{}", connection_type, "receiver");
                         register_stream_receiver(
                             topic_gdp_name,
                             direction,
