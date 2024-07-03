@@ -4,7 +4,7 @@ identifiers:
 services:
   - service_name: /add_three_ints # STEP1: your service name
     service_type: bench_msgs/srv/AddThreeInts # STEP2: your service type
-    qos: fast
+    qos: normal
 
 state_machine: 
   standby: 

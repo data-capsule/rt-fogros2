@@ -11,7 +11,7 @@ use fogrs_common::{
 };
 use futures::StreamExt;
 use log::{error, info, warn};
-use r2r::{Node, QosProfile};
+use r2r::Node;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tokio::{

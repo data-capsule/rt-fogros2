@@ -23,8 +23,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it
                                                              // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
 
-use libc::{c_char, c_int, c_void, setsockopt, SOL_SOCKET, SO_BINDTODEVICE};
-use pnet::datalink::{self, NetworkInterface};
+use libc::{c_int, c_void, setsockopt, SOL_SOCKET, SO_BINDTODEVICE};
+use pnet::datalink::{self};
 use std::ffi::CString;
 use std::os::unix::io::AsRawFd;
 
@@ -424,7 +424,7 @@ pub async fn register_stream_receiver(
         topic_gdp_name.clone(),
         receiver_key_name.clone(),
         sender_key_name.clone(),
-        direction.clone(),
+        direction,
         fib_tx.clone(),
         channel_tx.clone(),
         &mut processed_senders,
@@ -446,7 +446,7 @@ pub async fn register_stream_receiver(
                     topic_gdp_name.clone(),
                     receiver_key_name.clone(),
                     sender_key_name.clone(),
-                    direction.clone(),
+                    direction,
                     fib_tx.clone(),
                     channel_tx.clone(),
                     &mut processed_senders,
@@ -461,7 +461,7 @@ pub async fn register_stream_receiver(
                     topic_gdp_name.clone(),
                     receiver_key_name.clone(),
                     sender_key_name.clone(),
-                    direction.clone(),
+                    direction,
                     fib_tx.clone(),
                     channel_tx.clone(),
                     &mut processed_senders,
