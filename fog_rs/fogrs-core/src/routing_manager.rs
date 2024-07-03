@@ -52,10 +52,6 @@ fn flip_direction(direction: &str) -> Option<String> {
         ("request-sender", "request-receiver"),
         ("response-sender", "response-receiver"),
         ("response-receiver", "response-sender"),
-        // ("pub-receiver", "sub-sender"),
-        // ("sub-sender", "pub-receiver"),
-        // ("pub-sender", "sub-receiver"),
-        // ("sub-receiver", "pub-sender"),
         ("pubsub-sender", "pubsub-receiver"),
         ("pubsub-receiver", "pubsub-sender"),
     ];
