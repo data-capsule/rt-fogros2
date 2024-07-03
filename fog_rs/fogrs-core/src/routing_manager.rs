@@ -30,12 +30,26 @@ use pnet::datalink::{self, NetworkInterface};
 
 const transmission_protocol: &str = "kcp";
 
+
+fn connection_type_str_to_connection_type(
+    connection_type: &str,
+) -> FibConnectionType {
+    match connection_type.to_uppercase().as_str() {
+        "SENDER"  => FibConnectionType::SENDER,
+        "RECEIVER" => FibConnectionType::RECEIVER,
+        "REQUEST" => FibConnectionType::REQUEST,
+        "RESPONSE" => FibConnectionType::RESPONSE,
+        _ => panic!("Invalid connection type {:?}", connection_type),
+    }
+}
+
+
 fn flip_direction(direction: &str) -> Option<String> {
     let mapping = [
-        ("request-receiver", "request-sender"),
-        ("response-sender", "response-receiver"),
-        ("request-sender", "request-receiver"),
-        ("response-receiver", "response-sender"),
+        ("REQUEST-receiver", "REQUEST-sender"),
+        ("RESPONSE-sender", "RESPONSE-receiver"),
+        ("REQUEST-sender", "REQUEST-receiver"),
+        ("RESPONSE-receiver", "RESPONSE-sender"),
         // ("pub-receiver", "sub-sender"),
         // ("sub-sender", "pub-receiver"),
         // ("pub-sender", "sub-receiver"),
@@ -101,7 +115,9 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 // sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
 
 pub async fn register_stream_sender(
-    topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
+    topic_gdp_name: GDPName, 
+    direction: String, 
+    fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
     interface: &str, 
     config: fogrs_kcp::KcpConfig,
@@ -221,8 +237,8 @@ pub async fn register_stream_sender(
                         connection_type: FibConnectionType::RECEIVER, // it connects to a remote receiver
                         forward_destination: Some(local_to_net_tx),
                         description: Some(format!(
-                            "udp stream for topic_name {:?} to address {:?}",
-                            topic_gdp_name, receiver_addr
+                            "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
+                            topic_gdp_name, receiver_addr, direction
                         )),
                     };
                     let _ = channel_tx.send(channel_update_msg);
@@ -248,7 +264,10 @@ pub async fn register_stream_sender(
 // sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
 
 pub async fn receiver_registration_handler(
-    topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String,
+    topic_gdp_name: GDPName, 
+    receiver_key_name: String, 
+    sender_key_name: String,
+    direction: &str,
     fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
     processed_senders: &mut Vec<String>,
     interface: &str,
@@ -290,6 +309,7 @@ pub async fn receiver_registration_handler(
         let channel_tx_clone = channel_tx.clone();
         let receiver_key_name = receiver_key_name.clone();
         let redis_url = redis_url.clone();
+        let direction = direction.to_string();
         tokio::spawn(async move {
             // reader_and_writer(
             //     stream,
@@ -349,8 +369,8 @@ pub async fn receiver_registration_handler(
                 connection_type: FibConnectionType::SENDER, // it connects from a remote sender
                 forward_destination: Some(local_to_net_tx),
                 description: Some(format!(
-                    "udp stream receiver for topic_name {:?} bind to address {:?}",
-                    topic_gdp_name, sock_public_addr
+                    "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} direction {:?}",
+                    topic_gdp_name, sock_public_addr, direction,
                 )),
             };
             channel_tx_clone
@@ -408,6 +428,7 @@ pub async fn register_stream_receiver(
         topic_gdp_name.clone(),
         receiver_key_name.clone(),
         sender_key_name.clone(),
+        direction.clone(),
         fib_tx.clone(),
         channel_tx.clone(),
         &mut processed_senders,
@@ -429,6 +450,7 @@ pub async fn register_stream_receiver(
                     topic_gdp_name.clone(),
                     receiver_key_name.clone(),
                     sender_key_name.clone(),
+                    direction.clone(),
                     fib_tx.clone(),
                     channel_tx.clone(),
                     &mut processed_senders,
@@ -443,6 +465,7 @@ pub async fn register_stream_receiver(
                     topic_gdp_name.clone(),
                     receiver_key_name.clone(),
                     sender_key_name.clone(),
+                    direction.clone(),
                     fib_tx.clone(),
                     channel_tx.clone(),
                     &mut processed_senders,
@@ -477,7 +500,6 @@ impl RoutingManager {
     pub async fn handle_sender_routing(
         &self, mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
     ) {
-        let connection_type = FibConnectionType::SENDER;
         loop {
             tokio::select! {
                 Some(request) = request_rx.recv() => {
@@ -490,6 +512,7 @@ impl RoutingManager {
                     let topic_qos = request.topic_qos.clone();
                     let config = to_kcp_config(topic_qos.as_str());
                     let interface = get_default_interface_name().unwrap();
+                    let connection_type = connection_type_str_to_connection_type(&request.connection_type.unwrap());
 
                     let topic_gdp_name = GDPName(get_gdp_name_from_topic(
                         &topic_name,
@@ -541,7 +564,6 @@ impl RoutingManager {
     pub async fn handle_receiver_routing(
         &self, mut request_rx: UnboundedReceiver<RoutingManagerRequest>,
     ) {
-        let connection_type = FibConnectionType::RECEIVER;
         let mut handles = vec![];
 
         loop {
@@ -560,6 +582,7 @@ impl RoutingManager {
                             &topic_type,
                             &certificate,
                         ));
+                        let connection_type = connection_type_str_to_connection_type(&request.connection_type.unwrap());
 
                         let config = to_kcp_config(topic_qos.as_str());
                         let interface = get_default_interface_name().unwrap();                
