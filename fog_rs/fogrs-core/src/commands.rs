@@ -55,7 +55,7 @@ async fn webrtc_router_async_loop() {
     // future_handles.push(ros_topic_manager_handle);
 
     let ros_service_manager_handle = tokio::spawn(async move {
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        std::thread::sleep(std::time::Duration::from_millis(100));
         crate::service_manager::main_service_manager(service_request_rx).await;
     });
 
