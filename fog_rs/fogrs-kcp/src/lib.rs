@@ -1,7 +1,7 @@
 //! Library of KCP on Tokio
 
 pub use self::{
-    config::{KcpConfig, KcpNoDelayConfig, to_kcp_config},
+    config::{to_kcp_config, KcpConfig, KcpNoDelayConfig},
     listener::KcpListener,
     stream::KcpStream,
 };

@@ -1,4 +1,7 @@
-use fogrs_common::packet_structs::{construct_gdp_request_with_guid, construct_gdp_response_with_guid, generate_gdp_name_from_string, Packet};
+use fogrs_common::packet_structs::{
+    construct_gdp_request_with_guid, construct_gdp_response_with_guid,
+    generate_gdp_name_from_string, Packet,
+};
 use fogrs_common::{
     fib_structs::{FibChangeAction, FibConnectionType, FibStateChange},
     packet_structs::{
@@ -252,9 +255,12 @@ impl ROSManager {
         // tokio::join!(join_handles);
     }
 
-    pub async fn handle_local_ros_service_caller( // handle_local_ros_service_caller
-        self, mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-        fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
+    pub async fn handle_local_ros_service_caller(
+        // handle_local_ros_service_caller
+        self,
+        mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+        fib_tx: UnboundedSender<GDPPacket>,
+        channel_tx: UnboundedSender<FibStateChange>,
     ) {
         info!("handle_local_ros_service_caller has started");
 
@@ -275,96 +281,99 @@ impl ROSManager {
 
         loop {
             tokio::select! {
-                Some(request) = status_recv.recv() => {
-                    let topic_name = request.topic_name;
-                    let topic_type = request.topic_type;
-                    let action = request.action;
-                    let certificate = request.certificate;
-                    let fib_tx = fib_tx.clone();
-                    let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                        &topic_name,
-                        &topic_type,
-                        &certificate,
-                    ));
+            Some(request) = status_recv.recv() => {
+                let topic_name = request.topic_name;
+                let topic_type = request.topic_type;
+                let action = request.action;
+                let certificate = request.certificate;
+                let fib_tx = fib_tx.clone();
+                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                    &topic_name,
+                    &topic_type,
+                    &certificate,
+                ));
 
-                    if request.action != TopicManagerAction::ADD {
-                        // let channel_update_msg = FibStateChange {
-                        //     action: request.action,
-                        //     topic_gdp_name: topic_gdp_name,
-                        //     forward_destination: None,
-                        // };
-                        // let _ = channel_tx.send(channel_update_msg);
-                        error!("action {:?} not supported in ros_remote_service_provider", request.action);
-                        continue;
-                    }
-                    
-                    // let stream = request.stream.unwrap();
-
-
-                    info!(
-                        "[handle_local_ros_service_caller] topic creator for topic {}, type {}, action {:?}",
-                        topic_name, topic_type, action
-                    );
-
-
-                    // RTC -> FIB -> ROS publisher
-                    let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
-
-                    let channel_update_msg = FibStateChange {
-                        action: FibChangeAction::ADD,
-                        connection_type: FibConnectionType::REQUESTRECEIVER,
-                        topic_gdp_name: topic_gdp_name,
-                        forward_destination: Some(ros_tx),
-                        description: Some("ros service request".to_string()),
-                    };
-                    let _ = channel_tx.send(channel_update_msg);
-
-                    let manager_node = self.node.clone();
-
-                    if existing_topics.contains(&topic_gdp_name) {
-                        info!("topic {:?} already exists in existing topics; don't need to create another publisher", topic_gdp_name);
-                    } else {
-                        existing_topics.push(topic_gdp_name);
-                        let untyped_client = manager_node.lock().unwrap()
-                        .create_client_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
-                        .expect("topic publisher create failure");
-    
-                        // receive from the rtc_rx and call the local service
-                        let ros_handle = tokio::spawn(async move {
-                            info!("[handle_local_ros_service_caller] ROS handling loop has started!");
-                            loop{
-                                let pkt_to_forward = ros_rx.recv().await.unwrap();
-                                if pkt_to_forward.action == GdpAction::Request {
-                                    info!("new payload to publish {:?}", pkt_to_forward.guid);
-                                    if pkt_to_forward.gdpname == topic_gdp_name {
-                                        let payload = pkt_to_forward.get_byte_payload().unwrap();
-                                        let ros_msg = payload;
-                                        info!("the request payload to publish is {:?}", ros_msg);
-                                        let resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await.expect("service call failure");
-                                        info!("the response is {:?}", resp);
-                                        //send back the response to the rtc
-                                        let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id));
-                                        let packet = construct_gdp_response_with_guid(topic_gdp_name, self.unique_ros_node_gdp_name, resp.unwrap().to_vec(), packet_guid);
-                                        fib_tx.send(packet).expect("send for ros subscriber failure");
-                                    } else{
-                                        warn!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
-                                    }
-                                } else {
-                                    warn!("received a packet with action {:?} in ros_local_service_caller", pkt_to_forward.action);
-                                }
-                            }
-                        });
-    
-                       join_handles.push(ros_handle);
-                    }
+                if request.action != TopicManagerAction::ADD {
+                    // let channel_update_msg = FibStateChange {
+                    //     action: request.action,
+                    //     topic_gdp_name: topic_gdp_name,
+                    //     forward_destination: None,
+                    // };
+                    // let _ = channel_tx.send(channel_update_msg);
+                    error!("action {:?} not supported in ros_remote_service_provider", request.action);
+                    continue;
                 }
+
+                // let stream = request.stream.unwrap();
+
+
+                info!(
+                    "[handle_local_ros_service_caller] topic creator for topic {}, type {}, action {:?}",
+                    topic_name, topic_type, action
+                );
+
+
+                // RTC -> FIB -> ROS publisher
+                let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
+
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::ADD,
+                    connection_type: FibConnectionType::REQUESTRECEIVER,
+                    topic_gdp_name: topic_gdp_name,
+                    forward_destination: Some(ros_tx),
+                    description: Some("ros service request".to_string()),
+                };
+                let _ = channel_tx.send(channel_update_msg);
+
+                let manager_node = self.node.clone();
+
+                if existing_topics.contains(&topic_gdp_name) {
+                    info!("topic {:?} already exists in existing topics; don't need to create another publisher", topic_gdp_name);
+                } else {
+                    existing_topics.push(topic_gdp_name);
+                    let untyped_client = manager_node.lock().unwrap()
+                    .create_client_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
+                    .expect("topic publisher create failure");
+
+                    // receive from the rtc_rx and call the local service
+                    let ros_handle = tokio::spawn(async move {
+                        info!("[handle_local_ros_service_caller] ROS handling loop has started!");
+                        loop{
+                            let pkt_to_forward = ros_rx.recv().await.unwrap();
+                            if pkt_to_forward.action == GdpAction::Request {
+                                info!("new payload to publish {:?}", pkt_to_forward.guid);
+                                if pkt_to_forward.gdpname == topic_gdp_name {
+                                    let payload = pkt_to_forward.get_byte_payload().unwrap();
+                                    let ros_msg = payload;
+                                    info!("the request payload to publish is {:?}", ros_msg);
+                                    let resp = untyped_client.request(ros_msg.to_vec()).expect("service call failure").await.expect("service call failure");
+                                    info!("the response is {:?}", resp);
+                                    //send back the response to the rtc
+                                    let packet_guid = pkt_to_forward.guid.unwrap(); //generate_gdp_name_from_string(&stringify!(resp.request_id));
+                                    let packet = construct_gdp_response_with_guid(topic_gdp_name, self.unique_ros_node_gdp_name, resp.unwrap().to_vec(), packet_guid);
+                                    fib_tx.send(packet).expect("send for ros subscriber failure");
+                                } else{
+                                    warn!("{:?} received a packet for name {:?}",pkt_to_forward.gdpname, topic_gdp_name);
+                                }
+                            } else {
+                                warn!("received a packet with action {:?} in ros_local_service_caller", pkt_to_forward.action);
+                            }
+                        }
+                    });
+
+                   join_handles.push(ros_handle);
                 }
             }
+            }
         }
+    }
 
-    pub async fn handle_remote_ros_service( //handle_remote_ros_service
-        self, mut status_recv: UnboundedReceiver<TopicManagerRequest>,
-        fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
+    pub async fn handle_remote_ros_service(
+        // handle_remote_ros_service
+        self,
+        mut status_recv: UnboundedReceiver<TopicManagerRequest>,
+        fib_tx: UnboundedSender<GDPPacket>,
+        channel_tx: UnboundedSender<FibStateChange>,
     ) {
         info!("handle_remote_ros_service has started");
 
@@ -385,102 +394,101 @@ impl ROSManager {
 
         loop {
             tokio::select! {
-                Some(request) = status_recv.recv() => {
-                    let topic_name = request.topic_name;
-                    let topic_type = request.topic_type;
-                    let action = request.action;
-                    let certificate = request.certificate;
-                    let fib_tx = fib_tx.clone();
-                    let topic_gdp_name = GDPName(get_gdp_name_from_topic(
-                        &topic_name,
-                        &topic_type,
-                        &certificate,
-                    ));
-    
-                    if request.action != TopicManagerAction::ADD {
-                        // let channel_update_msg = FibStateChange {
-                        //     action: request.action,
-                        //     topic_gdp_name: topic_gdp_name,
-                        //     forward_destination: None,
-                        // };
-                        // let _ = channel_tx.send(channel_update_msg);
-                        error!("action {:?} not supported in handle_local_ros_service_caller", request.action);
-                        continue;
-                    }
-    
-                    // let stream = request.stream.unwrap();
-                    let manager_node = self.node.clone();
-    
-    
-                    info!(
-                        "[handle_remote_ros_service] topic creator for topic {}, type {}, action {:?}",
-                        topic_name, topic_type, action
-                    );
-    
-                    let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
+            Some(request) = status_recv.recv() => {
+                let topic_name = request.topic_name;
+                let topic_type = request.topic_type;
+                let action = request.action;
+                let certificate = request.certificate;
+                let fib_tx = fib_tx.clone();
+                let topic_gdp_name = GDPName(get_gdp_name_from_topic(
+                    &topic_name,
+                    &topic_type,
+                    &certificate,
+                ));
 
-                    if existing_topics.contains(&topic_gdp_name) {
-                        info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
-                    } else {
-    
-                        let channel_update_msg = FibStateChange {
-                            action: FibChangeAction::ADD,
-                            connection_type: FibConnectionType::RESPONSERECEIVER,
-                            topic_gdp_name: topic_gdp_name,
-                            forward_destination: Some(ros_tx),
-                            description: Some("ros service response".to_string()),
-                        };
-                        let _ = channel_tx.send(channel_update_msg);
-    
-                        existing_topics.push(topic_gdp_name);
-                        let mut service = manager_node.lock().unwrap()
-                        .create_service_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
-                        .expect("topic subscribing failure");
-    
-                        let ros_handle = tokio::spawn (async move {
-                            loop {
-                                tokio::select!{
-                                    Some(req) = service.next() => {
-                                        // send it to webrtc
-                                        //packet guid is the hash of the request id as string
-                                        let guid = format!("{:?}", req.request_id);
-                                        info!("received a ROS request {:?}", guid);
-                                        let packet_guid = generate_gdp_name_from_string(&guid);
-                                        let packet = construct_gdp_request_with_guid(topic_gdp_name, self.unique_ros_node_gdp_name, req.message.clone(), packet_guid );
-                                        // info!("sending to webrtc {:?}", packet);
-                                        fib_tx.send(packet).expect("send for ros subscriber failure");
-                                        tokio::select! {
-                                            Some(packet) = ros_rx.recv() => {
-                                                // send it to ros
-                                                // let msg = r2r::std_msgs::String::from_bytes(&packet).unwrap();
-                                                // service.send_response(msg).await.expect("send for ros subscriber failure");
-    
-                                                info!("received from webrtc in ros_rx {:?}", packet);
-                                                let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
-                                                // let respond_msg_in_json = &packet.payload.unwrap();
-                                                respond_msg.from_binary(packet.payload.unwrap()); //.unwrap();
-                                                info!("the decoded payload to publish is {:?}", respond_msg);
-                                                req.respond(respond_msg).expect("could not send service response");
-                                            },
-                                            // timeout after 1 second
-                                            _ = tokio::time::sleep(Duration::from_millis(1000)) => {
-                                                error!("timeout for ros_rx");
-                                                let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
-                                                req.respond(respond_msg).expect("could not send service response");
-                                            }
+                if request.action != TopicManagerAction::ADD {
+                    // let channel_update_msg = FibStateChange {
+                    //     action: request.action,
+                    //     topic_gdp_name: topic_gdp_name,
+                    //     forward_destination: None,
+                    // };
+                    // let _ = channel_tx.send(channel_update_msg);
+                    error!("action {:?} not supported in handle_local_ros_service_caller", request.action);
+                    continue;
+                }
+
+                // let stream = request.stream.unwrap();
+                let manager_node = self.node.clone();
+
+
+                info!(
+                    "[handle_remote_ros_service] topic creator for topic {}, type {}, action {:?}",
+                    topic_name, topic_type, action
+                );
+
+                let (ros_tx, mut ros_rx) = mpsc::unbounded_channel();
+
+                if existing_topics.contains(&topic_gdp_name) {
+                    info!("topic {:?} already exists in existing topics; don't need to create another subscriber", topic_gdp_name);
+                } else {
+
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::ADD,
+                        connection_type: FibConnectionType::RESPONSERECEIVER,
+                        topic_gdp_name: topic_gdp_name,
+                        forward_destination: Some(ros_tx),
+                        description: Some("ros service response".to_string()),
+                    };
+                    let _ = channel_tx.send(channel_update_msg);
+
+                    existing_topics.push(topic_gdp_name);
+                    let mut service = manager_node.lock().unwrap()
+                    .create_service_untyped(&topic_name, &topic_type, r2r::QosProfile::default())
+                    .expect("topic subscribing failure");
+
+                    let ros_handle = tokio::spawn (async move {
+                        loop {
+                            tokio::select!{
+                                Some(req) = service.next() => {
+                                    // send it to webrtc
+                                    //packet guid is the hash of the request id as string
+                                    let guid = format!("{:?}", req.request_id);
+                                    info!("received a ROS request {:?}", guid);
+                                    let packet_guid = generate_gdp_name_from_string(&guid);
+                                    let packet = construct_gdp_request_with_guid(topic_gdp_name, self.unique_ros_node_gdp_name, req.message.clone(), packet_guid );
+                                    // info!("sending to webrtc {:?}", packet);
+                                    fib_tx.send(packet).expect("send for ros subscriber failure");
+                                    tokio::select! {
+                                        Some(packet) = ros_rx.recv() => {
+                                            // send it to ros
+                                            // let msg = r2r::std_msgs::String::from_bytes(&packet).unwrap();
+                                            // service.send_response(msg).await.expect("send for ros subscriber failure");
+
+                                            info!("received from webrtc in ros_rx {:?}", packet);
+                                            let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
+                                            // let respond_msg_in_json = &packet.payload.unwrap();
+                                            respond_msg.from_binary(packet.payload.unwrap()); //.unwrap();
+                                            info!("the decoded payload to publish is {:?}", respond_msg);
+                                            req.respond(respond_msg).expect("could not send service response");
+                                        },
+                                        // timeout after 1 second
+                                        _ = tokio::time::sleep(Duration::from_millis(1000)) => {
+                                            error!("timeout for ros_rx");
+                                            let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
+                                            req.respond(respond_msg).expect("could not send service response");
                                         }
-                                    },
-                                }
+                                    }
+                                },
                             }
                         }
-                        );
-    
-                       join_handles.push(ros_handle);
                     }
-                }
-    
-                    }
+                    );
+
+                   join_handles.push(ros_handle);
                 }
             }
 
+                }
+        }
+    }
 }

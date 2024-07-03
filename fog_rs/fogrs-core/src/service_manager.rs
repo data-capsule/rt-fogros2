@@ -98,13 +98,8 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     let channel_tx_clone = channel_tx.clone();
     waiting_handles.push(tokio::spawn(async move {
         ros_manager_clone
-            .handle_remote_ros_service( 
-                client_operation_rx,
-                fib_tx_clone,
-                channel_tx_clone,
-            )
+            .handle_remote_ros_service(client_operation_rx, fib_tx_clone, channel_tx_clone)
             .await;
-        
     }));
 
     let (service_operation_tx, service_operation_rx) = mpsc::unbounded_channel();
@@ -114,14 +109,9 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
     let channel_tx_clone = channel_tx.clone();
     waiting_handles.push(tokio::spawn(async move {
         ros_manager_clone
-            .handle_local_ros_service_caller(
-                service_operation_rx,
-                fib_tx_clone,
-                channel_tx_clone,
-            )
+            .handle_local_ros_service_caller(service_operation_rx, fib_tx_clone, channel_tx_clone)
             .await;
     }));
-
 
 
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
@@ -296,5 +286,4 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
             },
         }
     }
-
 }

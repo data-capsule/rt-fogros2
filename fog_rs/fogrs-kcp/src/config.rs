@@ -109,40 +109,34 @@ impl KcpConfig {
 }
 
 // fast, normal, slow
-pub fn to_kcp_config(config: &str) -> KcpConfig{
+pub fn to_kcp_config(config: &str) -> KcpConfig {
     match config {
-        "fast" => {
-            KcpConfig {
-                mtu: 1400,
-                nodelay: KcpNoDelayConfig::fastest(),
-                wnd_size: (256, 256),
-                session_expire: Duration::from_secs(90),
-                flush_write: true,
-                flush_acks_input: true,
-                stream: false,
-            }
-        }, 
-        "normal" => {
-            KcpConfig {
-                mtu: 1400,
-                nodelay: KcpNoDelayConfig::normal(),
-                wnd_size: (256, 256),
-                session_expire: Duration::from_secs(90),
-                flush_write: false,
-                flush_acks_input: false,
-                stream: false,
-            }
+        "fast" => KcpConfig {
+            mtu: 1400,
+            nodelay: KcpNoDelayConfig::fastest(),
+            wnd_size: (256, 256),
+            session_expire: Duration::from_secs(90),
+            flush_write: true,
+            flush_acks_input: true,
+            stream: false,
         },
-        _ => {
-            KcpConfig {
-                mtu: 1400,
-                nodelay: KcpNoDelayConfig::default(),
-                wnd_size: (256, 256),
-                session_expire: Duration::from_secs(90),
-                flush_write: false,
-                flush_acks_input: false,
-                stream: false,
-            }
-        }
+        "normal" => KcpConfig {
+            mtu: 1400,
+            nodelay: KcpNoDelayConfig::normal(),
+            wnd_size: (256, 256),
+            session_expire: Duration::from_secs(90),
+            flush_write: false,
+            flush_acks_input: false,
+            stream: false,
+        },
+        _ => KcpConfig {
+            mtu: 1400,
+            nodelay: KcpNoDelayConfig::default(),
+            wnd_size: (256, 256),
+            session_expire: Duration::from_secs(90),
+            flush_write: false,
+            flush_acks_input: false,
+            stream: false,
+        },
     }
 }

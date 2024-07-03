@@ -7,8 +7,8 @@ use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChan
 use fogrs_common::packet_structs::{
     generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GDPPacket,
 };
-use fogrs_kcp::KcpListener;
 use fogrs_kcp::to_kcp_config;
+use fogrs_kcp::KcpListener;
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
 use redis_async::client;
@@ -23,19 +23,17 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender}; // TODO: replace it
                                                              // use fogrs_common::fib_structs::TopicManagerAction;
 use tokio::sync::mpsc::{self};
 
-use std::os::unix::io::AsRawFd;
-use libc::{setsockopt, c_int, c_void, c_char, SOL_SOCKET, SO_BINDTODEVICE};
-use std::ffi::CString;
+use libc::{c_char, c_int, c_void, setsockopt, SOL_SOCKET, SO_BINDTODEVICE};
 use pnet::datalink::{self, NetworkInterface};
+use std::ffi::CString;
+use std::os::unix::io::AsRawFd;
 
 const transmission_protocol: &str = "kcp";
 
 
-fn direction_str_to_connection_type(
-    connection_type: &str,
-) -> FibConnectionType {
+fn direction_str_to_connection_type(connection_type: &str) -> FibConnectionType {
     match connection_type.to_uppercase().as_str() {
-        "PUBSUB-SENDER"  => FibConnectionType::SENDER,
+        "PUBSUB-SENDER" => FibConnectionType::SENDER,
         "PUBSUB-RECEIVER" => FibConnectionType::RECEIVER,
         "REQUEST-SENDER" => FibConnectionType::REQUESTSENDER,
         "REQUEST-RECEIVER" => FibConnectionType::REQUESTRECEIVER,
@@ -65,7 +63,6 @@ fn flip_direction(direction: &str) -> Option<String> {
 }
 
 
-
 fn get_ip_address(interface_name: &str) -> Option<SocketAddr> {
     let interfaces = datalink::interfaces();
     for interface in interfaces {
@@ -90,7 +87,9 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
             SOL_SOCKET,
             SO_BINDTODEVICE,
             cstr.as_ptr() as *const c_void,
-            (cstr.to_bytes_with_nul().len() as c_int).try_into().unwrap(),
+            (cstr.to_bytes_with_nul().len() as c_int)
+                .try_into()
+                .unwrap(),
         )
     };
 
@@ -113,12 +112,8 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 // sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
 
 pub async fn register_stream_sender(
-    topic_gdp_name: GDPName, 
-    direction: String, 
-    fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>,
-    interface: &str, 
-    config: fogrs_kcp::KcpConfig,
+    topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
@@ -232,10 +227,10 @@ pub async fn register_stream_sender(
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
                         topic_gdp_name: topic_gdp_name,
-                        // here is a little bit tricky: 
+                        // here is a little bit tricky:
                         //  to fib, it is the receiver
                         // it connects to a remote receiver
-                        connection_type: direction_str_to_connection_type(flip_direction(direction).unwrap().as_str()), 
+                        connection_type: direction_str_to_connection_type(flip_direction(direction).unwrap().as_str()),
                         forward_destination: Some(local_to_net_tx),
                         description: Some(format!(
                             "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
@@ -265,14 +260,9 @@ pub async fn register_stream_sender(
 // sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
 
 pub async fn receiver_registration_handler(
-    topic_gdp_name: GDPName, 
-    receiver_key_name: String, 
-    sender_key_name: String,
-    direction: &str,
+    topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String, direction: &str,
     fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
-    processed_senders: &mut Vec<String>,
-    interface: &str,
-    config: fogrs_kcp::KcpConfig,
+    processed_senders: &mut Vec<String>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
     let redis_url = get_redis_url();
 
@@ -293,12 +283,15 @@ pub async fn receiver_registration_handler(
 
         bind_to_interface(&stream, interface).expect("Cannot bind to interface");
 
-        let sock_public_addr = match  get_socket_stun(&stream).await {
+        let sock_public_addr = match get_socket_stun(&stream).await {
             Ok(addr) => addr,
             Err(err) => {
-                let mut pnet_addr =  get_ip_address(interface).unwrap();
+                let mut pnet_addr = get_ip_address(interface).unwrap();
                 pnet_addr.set_port(stream.local_addr().unwrap().port());
-                warn!("Failed to get public address from stun, error: {}, using pnet addr {}", err, pnet_addr);
+                warn!(
+                    "Failed to get public address from stun, error: {}, using pnet addr {}",
+                    err, pnet_addr
+                );
                 pnet_addr
             }
         };
@@ -371,7 +364,7 @@ pub async fn receiver_registration_handler(
                 // here is a little bit tricky: 
                 //  to fib, it is the receiver
                 // it connects to a remote receiver
-                connection_type: direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()), 
+                connection_type: direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
                 forward_destination: Some(local_to_net_tx),
                 description: Some(format!(
                     "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} direction {:?}",
@@ -387,9 +380,7 @@ pub async fn receiver_registration_handler(
 
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>,
-    interface: &str,
-    config: fogrs_kcp::KcpConfig,
+    channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
     let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
@@ -596,7 +587,7 @@ impl RoutingManager {
                         );
 
                         let config = to_kcp_config(topic_qos.as_str());
-                        let interface = get_default_interface_name().unwrap();                
+                        let interface = get_default_interface_name().unwrap();
 
                         warn!(
                             "receiver_network_routing_thread_manager {:?}",
