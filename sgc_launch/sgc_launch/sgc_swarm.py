@@ -59,6 +59,7 @@ class SGC_Swarm:
         self.topic_dict = dict()
         self.topic_qos_dict = dict()
         self.service_dict = dict()
+        self.service_qos_dict = dict()
 
         # states: map state_name to SGC_StateMachine
         self.state_dict = dict()
@@ -200,7 +201,6 @@ class SGC_Swarm:
                             self.construct_tree_by_sending_request_service(
                                 self.build_tree(self.config["topology"]),
                                 service_name,
-                                service_type,
                             )
 
                 self.assignment_dict[machine] = new_assignment_dict[machine]
@@ -258,6 +258,10 @@ class SGC_Swarm:
             return
         for service in config["services"]:
             self.service_dict[service["service_name"]] = service["service_type"]
+            if "qos" in service:
+                self.service_qos_dict[service["service_name"]] = service["qos"]
+            else:
+                self.service_qos_dict[service["service_name"]] = "default"
 
     def _load_state_machine(self, config):
         for state_name in config["state_machine"]:
@@ -308,7 +312,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    self.topic_dict[topic_name],
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "source",
                     "request" + node.address + session_id,
                     "request" + child.address + session_id,
@@ -318,7 +323,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    self.topic_dict[topic_name],
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "destination",
                     "response" + child.address + session_id,
                     "response" + node.address + session_id,
@@ -330,7 +336,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    self.topic_dict[topic_name],
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "destination",
                     "request" + node.address + session_id,
                     "request" + child.address + session_id,
@@ -340,7 +347,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    self.topic_dict[topic_name],
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "source",
                     "response" + child.address + session_id,
                     "response" + node.address + session_id,

@@ -1,7 +1,6 @@
 use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
 use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use crate::network::udp::get_socket_stun;
-use default_net::get_default_interface;
 use default_net::interface::get_default_interface_name;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};

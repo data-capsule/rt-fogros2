@@ -50,31 +50,18 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
 
     // let _service_provider_handle = tokio::spawn(ros_manager.handle_service_provider(service_request_rx, fib_tx.clone(), channel_tx.clone()));
 
-    // let _service_provider_handle = tokio::spawn(ROSManager::handle_service_provider(service_request_rx, fib_tx.clone(), channel_tx.clone()));
+    // let service_provider_handle = tokio::spawn(ROSManager::handle_service_provider(service_request_rx, fib_tx.clone(), channel_tx.clone()));
 
     let _fib_handle = tokio::spawn(async move {
         service_connection_fib_handler(fib_rx, channel_rx).await;
     });
+
 
     // Similarly, spawn other necessary tasks for `ros_local_service_caller`, `ros_topic_remote_publisher`, etc.
 
     // let (_sender_routing_handle, sender_routing_rx) = mpsc::unbounded_channel();
     // tokio::spawn(routing_manager.handle_sender_routing(sender_routing_rx));
     let routing_manager_clone = routing_manager.clone();
-    let (client_operation_tx, client_operation_rx) = mpsc::unbounded_channel();
-    waiting_handles.push(tokio::spawn(async move {
-        routing_manager_clone
-            .handle_client_routing(client_operation_rx)
-            .await;
-    }));
-
-    let (service_operation_tx, service_operation_rx) = mpsc::unbounded_channel();
-    let routing_manager_clone = routing_manager.clone();
-    waiting_handles.push(tokio::spawn(async move {
-        routing_manager_clone
-            .handle_service_routing(service_operation_rx)
-            .await;
-    }));
 
     // TODO: this will be created under ROS
     let (publisher_operation_tx, publisher_operation_rx) = mpsc::unbounded_channel();
@@ -104,6 +91,38 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
             )
             .await;
     }));
+
+    let (client_operation_tx, client_operation_rx) = mpsc::unbounded_channel();
+    let ros_manager_clone = ros_manager.clone();
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
+    waiting_handles.push(tokio::spawn(async move {
+        ros_manager_clone
+            .handle_ros_topic_local_client(
+                client_operation_rx,
+                fib_tx_clone,
+                channel_tx_clone,
+            )
+            .await;
+        
+    }));
+
+    let (service_operation_tx, service_operation_rx) = mpsc::unbounded_channel();
+    let routing_manager_clone = routing_manager.clone();
+    let ros_manager_clone = ros_manager.clone();
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
+    waiting_handles.push(tokio::spawn(async move {
+        ros_manager_clone
+            .handle_ros_topic_local_service(
+                service_operation_rx,
+                fib_tx_clone,
+                channel_tx_clone,
+            )
+            .await;
+    }));
+
+
 
     let (sender_routing_tx, sender_routing_rx) = mpsc::unbounded_channel();
     let routing_manager_clone = routing_manager.clone();
@@ -261,6 +280,8 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     communication_url: Some(payload.forward_receiver_url.unwrap()),
                                 }).expect("receiver routing tx failure");
                             }
+
+
 
                             _ => {
                                 warn!("unknown action {}", action);
