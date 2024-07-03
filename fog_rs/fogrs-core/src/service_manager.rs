@@ -56,9 +56,6 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
         service_connection_fib_handler(fib_rx, channel_rx).await;
     });
 
-
-    // Similarly, spawn other necessary tasks for `ros_local_service_caller`, `ros_topic_remote_publisher`, etc.
-
     // let (_sender_routing_handle, sender_routing_rx) = mpsc::unbounded_channel();
     // tokio::spawn(routing_manager.handle_sender_routing(sender_routing_rx));
     let routing_manager_clone = routing_manager.clone();
@@ -270,9 +267,6 @@ pub async fn main_service_manager(mut service_request_rx: UnboundedReceiver<ROST
                                     communication_url: Some(payload.forward_receiver_url.unwrap()),
                                 }).expect("receiver routing tx failure");
                             }
-
-
-
                             _ => {
                                 warn!("unknown action {}", action);
                             }

@@ -110,6 +110,8 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 //          1. put value {IP_address} to key {[sender-receiver]}
 //          2. append value [sender_gdp_name, receiver_gdp_name] to {<topic_name>-receiver}
 // sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
+//          2. after connect, remove the key [sender_gdp_name, receiver_gdp_name]
+
 
 pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
@@ -628,11 +630,4 @@ impl RoutingManager {
         }
     }
 
-    pub async fn handle_client_routing(&self, request_rx: UnboundedReceiver<TopicManagerRequest>) {
-        warn!("client routing not implemented yet!");
-    }
-
-    pub async fn handle_service_routing(&self, request_rx: UnboundedReceiver<TopicManagerRequest>) {
-        warn!("service routing not implemented yet!");
-    }
 }
