@@ -35,8 +35,8 @@ fn direction_str_to_connection_type(
     connection_type: &str,
 ) -> FibConnectionType {
     match connection_type.to_uppercase().as_str() {
-        "SENDER"  => FibConnectionType::SENDER,
-        "RECEIVER" => FibConnectionType::RECEIVER,
+        "PUBSUB-SENDER"  => FibConnectionType::SENDER,
+        "PUBSUB-RECEIVER" => FibConnectionType::RECEIVER,
         "REQUEST-SENDER" => FibConnectionType::REQUESTSENDER,
         "REQUEST-RECEIVER" => FibConnectionType::REQUESTRECEIVER,
         "RESPONSE-SENDER" => FibConnectionType::RESPONSESENDER,
@@ -56,8 +56,8 @@ fn flip_direction(direction: &str) -> Option<String> {
         // ("sub-sender", "pub-receiver"),
         // ("pub-sender", "sub-receiver"),
         // ("sub-receiver", "pub-sender"),
-        ("sender-sender", "receiver-receiver"),
-        ("receiver-receiver", "sender-sender"),
+        ("pubsub-sender", "pubsub-receiver"),
+        ("pubsub-receiver", "pubsub-sender"),
     ];
     info!("direction {:?}", direction);
     for (k, v) in mapping.iter() {

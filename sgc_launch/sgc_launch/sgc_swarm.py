@@ -541,7 +541,7 @@ class SGC_Swarm:
                 "topic_name": topic_name,
                 "topic_type": topic_type,
                 "topic_qos": topic_qos,
-                "connection_type": connection_type,
+                "connection_type": "pubsub",
                 "forward_sender_url": sender_url,
                 "forward_receiver_url": receiver_url,
             }
