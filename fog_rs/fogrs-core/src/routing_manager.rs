@@ -114,31 +114,133 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 }
 
 
-// protocol:
-// requirement, receiver connection needs to be created before sender
-// key: {<topic_name>-sender}, value: [a list of sender gdp names]
-// key: {<topic_name>-receiver}, value: [a list of [sender-receiver] gdp names]
-// key: {[sender-receiver]}, value: IP address of receiver
-// receiver: watch for {<topic_name>-sender}, if there is a new sender,
-//          1. put value {IP_address} to key {[sender-receiver]}
-//          2. append value [sender_gdp_name, receiver_gdp_name] to {<topic_name>-receiver}
-// sender : watch for [sender_gdp_name, receiver_gdp_name] in {<topic_name>-receiver}, if sender_gdp_name is in the list, query the value and connect
-//          2. after connect, remove the key [sender_gdp_name, receiver_gdp_name]
+async fn sender_socket_handler(
+    topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String, direction: String,
+    fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
+    stream: UdpSocket, sock_public_addr:SocketAddr, config: fogrs_kcp::KcpConfig,
+)
+{
 
+    // loop {
+    //     tokio::select! {
+    //     Some(message) = msgs.next() => {
+    //             info!("msg {:?}", message);
+    //             let received_operation = String::from_resp(message.unwrap()).unwrap();
+
+    //             if received_operation != "lpush" {
+    //                 info!("the operation is not lpush, ignore");
+    //                 continue;
+    //             }
+    //             let updated_receivers = get_entity_from_database(&redis_url, &receiver_key_name)
+    //                 .expect("Cannot get receiver from database");
+    //             info!("get a list of receivers from KVS {:?}", updated_receivers);
+    //             let new_receivers = updated_receivers
+    //                 .iter()
+    //                 .filter(|&r| !processed_receivers.contains(r))
+    //                 .collect::<Vec<_>>();
+
+    //             for receiver_channel in new_receivers { //format: sender_thread_gdp_name_str-receiver_thread_gdp_name_str
+    //                 info!("new receiver {:?}", receiver_channel);
+    //                 processed_receivers.push(receiver_channel.to_string());
+    //                 // check if value starts with sender_thread_gdp_name_str
+    //                 if !receiver_channel.starts_with(&sender_thread_gdp_name_str) {
+    //                     info!(
+    //                         "receiver_channel {:?}, not starting with {}",
+    //                         receiver_channel, sender_thread_gdp_name_str
+    //                     );
+    //                     continue;
+    //                 }
+
+    //                 // query value of key [sender_gdp_name, receiver_gdp_name] to be the receiver_addr
+    //                 let receiver_addr = &get_entity_from_database(&redis_url, &receiver_channel)
+    //                     .expect("Cannot get receiver from database")[0];
+    //                 info!("receiver_addr {:?}", receiver_addr);
+
+    //                 let receiver_socket_addr: SocketAddr = receiver_addr
+    //                     .parse()
+    //                     .expect("Failed to parse receiver address");
+
+    //                 let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+
+    //                 bind_to_interface(&stream, interface).expect("Cannot bind to interface");
+
+    //                 if transmission_protocol == "kcp" {
+    //                     let _ = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
+    //                     info!("connected to {:?}", receiver_socket_addr);
+    //                 } else if transmission_protocol == "udp" {
+    //                     let _ = stream.connect(receiver_socket_addr).await;
+    //                 }
+
+    //                 let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+    //                 let fib_clone = fib_tx.clone();
+    //                 tokio::spawn(async move {
+    //                     if transmission_protocol == "kcp" {
+    //                         let stream = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
+    //                         info!("connected to {:?}", receiver_socket_addr);
+    //                         crate::network::kcp::reader_and_writer(
+    //                             stream,
+    //                             fib_clone,
+    //                             // ebpf_tx,
+    //                             local_to_net_rx,
+    //                         ).await;
+    //                     } else if transmission_protocol == "udp" {
+    //                         let _ = stream.connect(receiver_socket_addr).await;
+    //                         crate::network::udp::reader_and_writer(
+    //                             stream,
+    //                             fib_clone,
+    //                             // ebpf_tx,
+    //                             local_to_net_rx,
+    //                         ).await;
+    //                     }
+    //                 });
+    //                 // send to fib an update
+    //                 let channel_update_msg = FibStateChange {
+    //                     action: FibChangeAction::ADD,
+    //                     topic_gdp_name: topic_gdp_name,
+    //                     // here is a little bit tricky:
+    //                     //  to fib, it is the receiver
+    //                     // it connects to a remote receiver
+    //                     connection_type: direction_str_to_connection_type(flip_direction(direction).unwrap().as_str()),
+    //                     forward_destination: Some(local_to_net_tx),
+    //                     description: Some(format!(
+    //                         "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
+    //                         topic_gdp_name, receiver_addr, direction
+    //                     )),
+    //                 };
+    //                 let _ = channel_tx.send(channel_update_msg);
+    //             }
+
+    //         }
+}
+
+// protocol:
+// sender_manager() 
+// candidates <- init_candidates()
+// append (GDPNAME, [candidates]) to {<topic_name>-sender}
+// subscribe to {<topic_name>-receiver}
+
+// on_new_connection_to_candidates():
+// 	send "PING {ts}"; await response
+// 	if PONG -> inform RIB a connectivity option 
+	
+// on_new_receiver():
+// 	connect to candidates in receiver
+// 	// sender needs to make sure receiver can receive it 
+// 	send "PING {ts}"; await response 
+// 	if PONG -> inform RIB a connectivity option 
 
 pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
-    let direction: &str = direction.as_str();
     let redis_url = get_redis_url();
-    let sender_key_name = format!("{}-{:}", topic_gdp_name, &direction);
+    let sender_key_name = format!("{}-{:}", topic_gdp_name, direction);
     let receiver_key_name = format!(
         "{}-{:}",
         topic_gdp_name,
-        flip_direction(&direction).unwrap()
+        flip_direction(direction.as_str()).unwrap()
     );
-    let sender_thread_gdp_name = generate_random_gdp_name();
+    let thread_gdp_name = generate_random_gdp_name();
 
     let redis_addr_and_port = get_redis_address_and_port();
     let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
@@ -152,117 +254,140 @@ pub async fn register_stream_sender(
         .expect("Cannot subscribe to topic");
     info!("subscribed to {:?}", redis_topic_stream_name);
 
-    let sender_thread_gdp_name_str = sender_thread_gdp_name.to_string();
-    let _ = add_entity_to_database_as_transaction(
-        &redis_url,
-        format!("{}-{:}", topic_gdp_name, direction).as_str(),
-        sender_thread_gdp_name_str.as_str(),
-    );
 
-    info!(
-        "registered {:?} with {:?}",
-        topic_gdp_name, sender_thread_gdp_name
-    );
+    let candidate_interfaces = gather_candidate_interfaces();
+    let mut candidate_struct = Candidate_Struct {
+        thread_gdp_name: thread_gdp_name.clone(),
+        candidates: vec![],
+    };
+    for interface_name in candidate_interfaces {
+            // open a socket to the candidate
+            let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
 
-    let mut processed_receivers = vec![];
-
-    loop {
-        tokio::select! {
-        Some(message) = msgs.next() => {
-                info!("msg {:?}", message);
-                let received_operation = String::from_resp(message.unwrap()).unwrap();
-
-                if received_operation != "lpush" {
-                    info!("the operation is not lpush, ignore");
+            // Bind the socket to a specific interface
+            match socket.bind_device(Some(interface_name.as_bytes())) {
+                Ok(_) => (),
+                Err(e) => {
+                    warn!("Failed to bind to interface {}, error: {}", interface_name, e);
                     continue;
                 }
-                let updated_receivers = get_entity_from_database(&redis_url, &receiver_key_name)
-                    .expect("Cannot get receiver from database");
-                info!("get a list of receivers from KVS {:?}", updated_receivers);
-                let new_receivers = updated_receivers
-                    .iter()
-                    .filter(|&r| !processed_receivers.contains(r))
-                    .collect::<Vec<_>>();
-
-                for receiver_channel in new_receivers { //format: sender_thread_gdp_name_str-receiver_thread_gdp_name_str
-                    info!("new receiver {:?}", receiver_channel);
-                    processed_receivers.push(receiver_channel.to_string());
-                    // check if value starts with sender_thread_gdp_name_str
-                    if !receiver_channel.starts_with(&sender_thread_gdp_name_str) {
-                        info!(
-                            "receiver_channel {:?}, not starting with {}",
-                            receiver_channel, sender_thread_gdp_name_str
-                        );
-                        continue;
-                    }
-
-                    // query value of key [sender_gdp_name, receiver_gdp_name] to be the receiver_addr
-                    let receiver_addr = &get_entity_from_database(&redis_url, &receiver_channel)
-                        .expect("Cannot get receiver from database")[0];
-                    info!("receiver_addr {:?}", receiver_addr);
-
-                    let receiver_socket_addr: SocketAddr = receiver_addr
-                        .parse()
-                        .expect("Failed to parse receiver address");
-
-                    let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-
-                    bind_to_interface(&stream, interface).expect("Cannot bind to interface");
-
-                    if transmission_protocol == "kcp" {
-                        let _ = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
-                        info!("connected to {:?}", receiver_socket_addr);
-                    } else if transmission_protocol == "udp" {
-                        let _ = stream.connect(receiver_socket_addr).await;
-                    }
-
-                    let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
-                    let fib_clone = fib_tx.clone();
-                    tokio::spawn(async move {
-                        if transmission_protocol == "kcp" {
-                            let stream = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
-                            info!("connected to {:?}", receiver_socket_addr);
-                            crate::network::kcp::reader_and_writer(
-                                stream,
-                                fib_clone,
-                                // ebpf_tx,
-                                local_to_net_rx,
-                            ).await;
-                        } else if transmission_protocol == "udp" {
-                            let _ = stream.connect(receiver_socket_addr).await;
-                            crate::network::udp::reader_and_writer(
-                                stream,
-                                fib_clone,
-                                // ebpf_tx,
-                                local_to_net_rx,
-                            ).await;
-                        }
-                    });
-                    // send to fib an update
-                    let channel_update_msg = FibStateChange {
-                        action: FibChangeAction::ADD,
-                        topic_gdp_name: topic_gdp_name,
-                        // here is a little bit tricky:
-                        //  to fib, it is the receiver
-                        // it connects to a remote receiver
-                        connection_type: direction_str_to_connection_type(flip_direction(direction).unwrap().as_str()),
-                        forward_destination: Some(local_to_net_tx),
-                        description: Some(format!(
-                            "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
-                            topic_gdp_name, receiver_addr, direction
-                        )),
-                    };
-                    let _ = channel_tx.send(channel_update_msg);
+            };
+            info!("UDP socket is bound to {:?} with device name {}", socket.local_addr().unwrap(), interface_name);
+            
+            let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
+            // get stun address
+            let sock_public_addr = match get_socket_stun(&tokio_socket).await {
+                Ok(addr) => {
+                    candidate_struct.candidates.push(addr);
+                    addr
+                },
+                Err(err) => {
+                    warn!("Address {:?} is not reachable as socket, error: {}", interface_name, err);
+                    continue;
                 }
+            };
+            // let _ = tokio::spawn(
+            //     receiver_socket_handler(
+            //         topic_gdp_name.clone(),
+            //         receiver_key_name.clone(),
+            //         sender_key_name.clone(),
+            //         direction.clone(),
+            //         fib_tx.clone(),
+            //         channel_tx.clone(),
+            //         tokio_socket,
+            //         sock_public_addr,
+            //         config.clone(),
+            //     )
+            // ).await;
+            let _ = tokio::spawn(
+                sender_socket_handler(
+                    topic_gdp_name.clone(),
+                    receiver_key_name.clone(),
+                    sender_key_name.clone(),
+                    direction.clone(),
+                    fib_tx.clone(),
+                    channel_tx.clone(),
+                    tokio_socket,
+                    sock_public_addr,
+                    config.clone(),
+                )
+            ).await;
+    }
+    info!("candidates {:?}", candidate_struct);
 
-            }
-            // _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
-            //     info!("waiting for redis message");
-            // }
+    let current_value_under_key = get_entity_from_database(&redis_url, &receiver_key_name)
+        .expect("Cannot get sender from database");
+    info!(
+        "get a list of senders from KVS {:?}",
+        current_value_under_key
+    );
+
+    for candidates in current_value_under_key {
+        let candidate_struct: Candidate_Struct = serde_json::from_str(&candidates).unwrap();
+        for candidate_addr in candidate_struct.candidates {
+            // open a socket to the candidate
+            let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
+            let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
+            tokio_socket.connect(candidate_addr).await.unwrap();
+            info!("connected to {:?}", candidate_addr);
         }
-    } // loop
-}
+    }
 
+    // let mut processed_senders = vec![];
+
+    // // check senders that are already in the KVS
+    // receiver_registration_handler(
+    //     topic_gdp_name.clone(),
+    //     receiver_key_name.clone(),
+    //     sender_key_name.clone(),
+    //     direction,
+    //     fib_tx.clone(),
+    //     channel_tx.clone(),
+    //     &mut processed_senders,
+    //     interface,
+    //     config,
+    // )
+    // .await;
+
+    // loop {
+    //     tokio::select! {
+    //         Some(message) = msgs.next() => {
+    //             let received_operation = String::from_resp(message.unwrap()).unwrap();
+    //             info!("KVS {}", received_operation);
+    //             if received_operation != "lpush" {
+    //                 info!("the operation is not lpush, ignore");
+    //                 continue;
+    //             }
+    //             receiver_registration_handler(
+    //                 topic_gdp_name.clone(),
+    //                 receiver_key_name.clone(),
+    //                 sender_key_name.clone(),
+    //                 direction,
+    //                 fib_tx.clone(),
+    //                 channel_tx.clone(),
+    //                 &mut processed_senders,
+    //                 interface,
+    //                 config,
+    //             ).await;
+    //         }
+
+    //         // check if there is any new sender
+    //         _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
+    //             receiver_registration_handler(
+    //                 topic_gdp_name.clone(),
+    //                 receiver_key_name.clone(),
+    //                 sender_key_name.clone(),
+    //                 direction,
+    //                 fib_tx.clone(),
+    //                 channel_tx.clone(),
+    //                 &mut processed_senders,
+    //                 interface,
+    //                 config,
+    //             ).await;
+    //         }
+    //     }
+    // }
+}
 
 // protocol:
 // receiving: determining which side should open the socket for a connection
@@ -568,58 +693,6 @@ pub async fn register_stream_receiver(
 
     // let mut processed_senders = vec![];
 
-    // // check senders that are already in the KVS
-    // receiver_registration_handler(
-    //     topic_gdp_name.clone(),
-    //     receiver_key_name.clone(),
-    //     sender_key_name.clone(),
-    //     direction,
-    //     fib_tx.clone(),
-    //     channel_tx.clone(),
-    //     &mut processed_senders,
-    //     interface,
-    //     config,
-    // )
-    // .await;
-
-    // loop {
-    //     tokio::select! {
-    //         Some(message) = msgs.next() => {
-    //             let received_operation = String::from_resp(message.unwrap()).unwrap();
-    //             info!("KVS {}", received_operation);
-    //             if received_operation != "lpush" {
-    //                 info!("the operation is not lpush, ignore");
-    //                 continue;
-    //             }
-    //             receiver_registration_handler(
-    //                 topic_gdp_name.clone(),
-    //                 receiver_key_name.clone(),
-    //                 sender_key_name.clone(),
-    //                 direction,
-    //                 fib_tx.clone(),
-    //                 channel_tx.clone(),
-    //                 &mut processed_senders,
-    //                 interface,
-    //                 config,
-    //             ).await;
-    //         }
-
-    //         // check if there is any new sender
-    //         _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
-    //             receiver_registration_handler(
-    //                 topic_gdp_name.clone(),
-    //                 receiver_key_name.clone(),
-    //                 sender_key_name.clone(),
-    //                 direction,
-    //                 fib_tx.clone(),
-    //                 channel_tx.clone(),
-    //                 &mut processed_senders,
-    //                 interface,
-    //                 config,
-    //             ).await;
-    //         }
-    //     }
-    // }
 }
 
 #[derive(Clone)]
