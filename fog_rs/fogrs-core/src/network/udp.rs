@@ -226,19 +226,25 @@ async fn udp_ice_get(
     trace!("generated to {:?}", buf);
     socket.send_to(&buf, to).await?;
     let mut buf = [0; 1500];
-    let (amt, src) = socket.recv_from(&mut buf).await?;
-    let buf = &buf[..amt];
-    trace!("got {:?}", buf);
-    let msg = Message::from_bytes(buf)
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid message"))?;
-    info!(
-        "got from {:?} to {:?} {}",
-        src,
-        socket.local_addr().unwrap(),
-        msg
-    );
+    tokio::select! {
+        Ok((amt, src)) = socket.recv_from(&mut buf) => {
+            let buf = &buf[..amt];
+            trace!("got {:?}", buf);
+            let msg = Message::from_bytes(buf)
+                .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid message"))?;
+            info!(
+                "got from {:?} to {:?} {}",
+                src,
+                socket.local_addr().unwrap(),
+                msg
+            );
+            return parse_response(msg);
+        }
+        _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "Timeout"));
+        }
+    }
 
-    parse_response(msg)
 }
 
 
