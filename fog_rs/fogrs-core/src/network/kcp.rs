@@ -100,6 +100,14 @@ pub async fn reader_and_writer(
                 let mut receiving_buf = receiving_buf[..receiving_buf_size].to_vec();
                 info!("read {} bytes", receiving_buf_size);
 
+                // if it's ping, just return the pong
+                if receiving_buf_size == 4 && receiving_buf == vec![0x70, 0x69, 0x6e, 0x67]{
+                    info!("received a ping packet");
+                    let pong = vec![0x70, 0x6f, 0x6e, 0x67];
+                    stream.write_all(&pong[..pong.len()]).await.unwrap();
+                    continue;
+                }
+
                 let mut header_payload_pair = vec!();
 
                 // last time it has incomplete buffer to complete
