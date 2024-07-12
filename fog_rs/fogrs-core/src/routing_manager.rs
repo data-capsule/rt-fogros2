@@ -7,7 +7,7 @@ use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChan
 use fogrs_common::packet_structs::{
     generate_random_gdp_name, get_gdp_name_from_topic, GDPName, GDPPacket,
 };
-use fogrs_kcp::to_kcp_config;
+use fogrs_kcp::{to_kcp_config, KcpStream};
 use fogrs_kcp::KcpListener;
 use fogrs_ros::TopicManagerRequest;
 use futures::StreamExt;
@@ -15,6 +15,7 @@ use librice::candidate;
 use redis_async::client;
 use redis_async::resp::FromResp;
 use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::fmt::format;
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
@@ -30,7 +31,7 @@ use libc::{c_int, c_void, setsockopt, SOL_SOCKET, SO_BINDTODEVICE};
 use pnet::datalink::{self};
 use std::ffi::CString;
 use std::os::unix::io::AsRawFd;
-use socket2::{Socket, Domain, Type, SockAddr};
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
 const transmission_protocol: &str = "kcp";
 
@@ -92,19 +93,29 @@ fn gather_candidate_interfaces() -> Vec<String> {
 }
 
 async fn send_ping_from_interface(interface_name: &str, remote_ip_addr:SocketAddr) -> std::io::Result<()> {
-    let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
 
-    // Bind the socket to a specific interface
-    match socket.bind_device(Some(interface_name.as_bytes())) {
-        Ok(_) => (),
-        Err(e) => {
-            warn!("Failed to bind to interface {}, error: {}", interface_name, e);
-            return Err(e);
+    let socket = UdpSocket::from_std(socket.into()).unwrap();
+    bind_to_interface(&socket, interface_name).unwrap();
+    socket.connect(remote_ip_addr).await.unwrap();
+    let buffer = b"ping";
+    let mut stream = match KcpStream::connect_with_socket(&fogrs_kcp::KcpConfig::default(),socket, remote_ip_addr).await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            error!("connect failed, error: {}", err);
+            return Err(err.into());
         }
     };
-    let socket = UdpSocket::from_std(socket.into()).unwrap();
-    let _ = socket.connect(remote_ip_addr).await;
-    let _ = socket.send(b"ping");
+    match stream.write_all(&buffer[..4]).await
+    {
+        Ok(_) => (),
+        Err(err) => {
+            error!("write failed, error: {}", err);
+            return Err(err);
+        }
+    };
+    
     info!("ping sent from interface {} to {}", interface_name, remote_ip_addr);
     let mut buf = [0; 1024];
     tokio::select! {
@@ -114,7 +125,7 @@ async fn send_ping_from_interface(interface_name: &str, remote_ip_addr:SocketAdd
                 "ping response is not received",
             ));
         }
-        Ok((len, _)) = socket.recv_from(&mut buf) => {
+        Ok(len) = stream.read(&mut buf) => {
             let response = str::from_utf8(&buf[..len]).unwrap();
             if response != "pong" {
                 return Err(std::io::Error::new(
@@ -175,7 +186,7 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 }
 
 pub async fn opening_side_socket_handler(
-    topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String, direction: String,
+    topic_gdp_name: GDPName, direction: String,
     fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
     stream: UdpSocket, sock_public_addr:SocketAddr, config: fogrs_kcp::KcpConfig,
 ) {
@@ -367,7 +378,7 @@ pub async fn register_stream_sender(
 
 
     let candidate_interfaces = gather_candidate_interfaces();
-    let mut candidate_struct = Candidate_Struct {
+    let mut candidate_struct = CandidateStruct {
         thread_gdp_name: thread_gdp_name.clone(),
         candidates: vec![],
     };
@@ -375,17 +386,9 @@ pub async fn register_stream_sender(
             // open a socket to the candidate
             let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
 
-            // Bind the socket to a specific interface
-            match socket.bind_device(Some(interface_name.as_bytes())) {
-                Ok(_) => (),
-                Err(e) => {
-                    warn!("Failed to bind to interface {}, error: {}", interface_name, e);
-                    continue;
-                }
-            };
-            info!("UDP socket is bound to {:?} with device name {}", socket.local_addr().unwrap(), interface_name);
-            
             let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
+            // Bind the socket to a specific interface
+            bind_to_interface(&tokio_socket, interface);
             // get stun address
             let sock_public_addr = match get_socket_stun(&tokio_socket).await {
                 Ok(addr) => {
@@ -400,8 +403,6 @@ pub async fn register_stream_sender(
             let _ = tokio::spawn(
                 opening_side_socket_handler(
                     topic_gdp_name.clone(),
-                    receiver_key_name.clone(),
-                    sender_key_name.clone(),
                     direction.clone(),
                     fib_tx.clone(),
                     channel_tx.clone(),
@@ -412,27 +413,28 @@ pub async fn register_stream_sender(
             ).await;
     }
     info!("candidates {:?}", candidate_struct);
-    let _ = add_entity_to_database_as_transaction(
-        &redis_url,
-        &receiver_key_name,
-        serde_json::to_string(&candidate_struct).unwrap().as_str(),
-    );
 
-    info!(
-        "registered {:?} with {:?}",
-        topic_gdp_name, candidate_struct
-    );
-
-    let current_value_under_key = get_entity_from_database(&redis_url, &receiver_key_name)
+    let receiver_candidates = get_entity_from_database(&redis_url, &receiver_key_name)
         .expect("Cannot get sender from database");
     info!(
-        "get a list of senders from KVS {:?}",
-        current_value_under_key
+        "get a list of receivers from KVS {:?}",
+        receiver_candidates
     );
 
-    for candidates in current_value_under_key {
-        let candidate_struct: Candidate_Struct = serde_json::from_str(&candidates).unwrap();
-        for candidate_addr in candidate_struct.candidates {
+    // let _ = add_entity_to_database_as_transaction(
+    //     &redis_url,
+    //     &sender_key_name,
+    //     serde_json::to_string(&candidate_struct).unwrap().as_str(),
+    // );
+    // info!(
+    //     "registered {:?} with {:?}",
+    //     topic_gdp_name, candidate_struct
+    // );
+
+    for receiver_candidate in receiver_candidates {
+        let receiver_struct: CandidateStruct = serde_json::from_str(&receiver_candidate).unwrap();
+        info!("receiver_struct {:?}", receiver_struct);
+        for candidate_addr in receiver_struct.candidates {
             let latency = get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
             info!("latency {:?}", latency);
         }
@@ -458,7 +460,7 @@ pub async fn register_stream_sender(
 // 	return with "PONG {ts}"
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Candidate_Struct {
+struct CandidateStruct {
     thread_gdp_name: GDPName,
     candidates: Vec<SocketAddr>,
 }
@@ -496,49 +498,48 @@ pub async fn register_stream_receiver(
     );
 
     let candidate_interfaces = gather_candidate_interfaces();
-    let mut candidate_struct = Candidate_Struct {
+    let mut candidate_struct = CandidateStruct {
         thread_gdp_name: thread_gdp_name.clone(),
         candidates: vec![],
     };
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
     for interface_name in candidate_interfaces {
-            // open a socket to the candidate
-            let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
+        let direction_clone = direction.clone();
+        let fib_tx_clone = fib_tx_clone.clone(); 
+        let channel_tx_clone = channel_tx_clone.clone();
+        // open a socket to the candidate
+        let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
 
-            // Bind the socket to a specific interface
-            match socket.bind_device(Some(interface_name.as_bytes())) {
-                Ok(_) => (),
-                Err(e) => {
-                    warn!("Failed to bind to interface {}, error: {}", interface_name, e);
-                    continue;
-                }
-            };
-            info!("UDP socket is bound to {:?} with device name {}", socket.local_addr().unwrap(), interface_name);
-            
-            let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
-            // get stun address
-            let sock_public_addr = match get_socket_stun(&tokio_socket).await {
-                Ok(addr) => {
-                    candidate_struct.candidates.push(addr);
-                    addr
-                },
-                Err(err) => {
-                    warn!("Address {:?} is not reachable as socket, error: {}", interface_name, err);
-                    continue;
-                }
-            };
-            let _ = tokio::spawn(
+        // Bind the socket to a specific interface
+        info!("UDP socket is bound to {:?} with device name {}", socket.local_addr().unwrap(), interface_name);
+        
+        let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
+        bind_to_interface(&tokio_socket, interface_name.as_str());
+        // get stun address
+        let sock_public_addr = match get_socket_stun(&tokio_socket).await {
+            Ok(addr) => {
+                candidate_struct.candidates.push(addr);
+                addr
+            },
+            Err(err) => {
+                warn!("Address {:?} is not reachable as socket, error: {}", interface_name, err);
+                continue;
+            }
+        };
+        let _ = tokio::spawn(
+            async move{
                 opening_side_socket_handler(
                     topic_gdp_name.clone(),
-                    receiver_key_name.clone(),
-                    sender_key_name.clone(),
-                    direction.clone(),
-                    fib_tx.clone(),
-                    channel_tx.clone(),
+                    direction_clone.clone(),
+                    fib_tx_clone,
+                    channel_tx_clone,
                     tokio_socket,
                     sock_public_addr,
                     config.clone(),
-                )
-            ).await;
+                ).await;
+            }
+        );
     }
     info!("candidates {:?}", candidate_struct);
 
@@ -548,11 +549,27 @@ pub async fn register_stream_receiver(
         &receiver_key_name,
         serde_json::to_string(&candidate_struct).unwrap().as_str(),
     );
-
     info!(
         "registered {:?} with {:?}",
         topic_gdp_name, candidate_struct
     );
+
+    tokio::select! {
+        Some(message) = msgs.next() => {
+            info!("msg {:?}", message);
+            let received_operation = String::from_resp(message.unwrap()).unwrap();
+
+            if received_operation != "lpush" {
+                info!("the operation is not lpush, ignore");
+                return;
+            }
+            let updated_senders = get_entity_from_database(&redis_url, &sender_key_name)
+                .expect("Cannot get sender from database");
+            info!("get a list of senders from KVS {:?}", updated_senders);
+
+            }
+        }
+}
 
     // return;
     // let current_value_under_key = get_entity_from_database(&redis_url, &sender_key_name)
@@ -564,7 +581,6 @@ pub async fn register_stream_receiver(
 
     // let mut processed_senders = vec![];
 
-}
 
 #[derive(Clone)]
 pub struct RoutingManager {

@@ -55,7 +55,7 @@ def main(args=None):
         node.get_logger().warning('Publishing: "%s"' % msg.data)
         publisher.publish(msg)
 
-    timer_period = 3  # seconds
+    timer_period = 10  # seconds
     timer = node.create_timer(timer_period, timer_callback)
 
     rclpy.spin(node)
