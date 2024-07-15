@@ -163,17 +163,14 @@ async fn get_latency_for_remote_ip_addr_from_all_interfaces(
         //start a timer
         let start_time = std::time::Instant::now();
 
-        let latency = match send_ping_from_interface(&interface_name, remote_ip_addr).await {
-            Ok(_) => {
-                info!("ping from interface {} to remote ip address {} is successful", interface_name, remote_ip_addr);
-                start_time.elapsed()
-            }
-            Err(e) => {
-                warn!("ping from interface {} to remote ip address {} is failed, error: {}", interface_name, remote_ip_addr, e);
-                std::time::Duration::from_secs(1000)
-            }
-        };
-        latencies.push((interface_name, latency));
+        let latency = send_ping_from_interface(&interface_name, remote_ip_addr).await;
+        if latency.is_ok() {
+            info!("ping from interface {} to remote ip address {} is successful", interface_name, remote_ip_addr);
+            latencies.push((interface_name, start_time.elapsed())); 
+        }
+        else{
+            warn!("ping from interface {} to remote ip address {} is failed, error: {}", interface_name, remote_ip_addr, latency.unwrap_err());
+        }
     }
     latencies
 }
@@ -455,8 +452,47 @@ pub async fn register_stream_sender(
         let receiver_struct: CandidateStruct = serde_json::from_str(&receiver_candidate).unwrap();
         info!("receiver_struct {:?}", receiver_struct);
         for candidate_addr in receiver_struct.candidates {
-            let latency = get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
-            info!("latency {:?}", latency);
+            let interface_to_latency = get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
+            info!("interface_to_latency {:?}", interface_to_latency);
+            
+            // forward from the interface to 
+
+            for (interface_name, latency) in interface_to_latency {
+                let direction = direction.clone();
+
+                
+                let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+                bind_to_interface(&socket, interface_name.as_str()).unwrap();
+
+                let _ = fogrs_kcp::KcpStream::connect(&config, candidate_addr).await.unwrap();
+                let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                let fib_clone = fib_tx.clone();
+                tokio::spawn(async move {
+                    let stream = fogrs_kcp::KcpStream::connect(&config, candidate_addr).await.unwrap();
+                    info!("connected to {:?}", candidate_addr);
+                    crate::network::kcp::reader_and_writer(
+                        stream,
+                        fib_clone,
+                        // ebpf_tx,
+                        local_to_net_rx,
+                    ).await;
+                });
+                // send to fib an update
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::ADD,
+                    topic_gdp_name: topic_gdp_name,
+                    // here is a little bit tricky:
+                    //  to fib, it is the receiver
+                    // it connects to a remote receiver
+                    connection_type: direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
+                    forward_destination: Some(local_to_net_tx),
+                    description: Some(format!(
+                        "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
+                        topic_gdp_name, candidate_addr, direction
+                    )),
+                };
+                let _ = channel_tx.send(channel_update_msg);
+            }
         }
     }
 
