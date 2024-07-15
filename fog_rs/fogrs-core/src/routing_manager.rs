@@ -16,8 +16,10 @@ use redis_async::client;
 use redis_async::resp::FromResp;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::time;
 use std::fmt::format;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::net::UdpSocket;
 
 use core::panic;
@@ -96,10 +98,11 @@ async fn send_ping_from_interface(interface_name: &str, remote_ip_addr:SocketAdd
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
 
     let socket = UdpSocket::from_std(socket.into()).unwrap();
+    // TODO: bind to interface
     bind_to_interface(&socket, interface_name).unwrap();
-    socket.connect(remote_ip_addr).await.unwrap();
+
     let buffer = b"ping";
-    let mut stream = match KcpStream::connect_with_socket(&fogrs_kcp::KcpConfig::default(),socket, remote_ip_addr).await
+    let mut stream = match KcpStream::connect_with_socket(&to_kcp_config("fast"),socket, remote_ip_addr).await
     {
         Ok(s) => s,
         Err(err) => {
@@ -107,6 +110,7 @@ async fn send_ping_from_interface(interface_name: &str, remote_ip_addr:SocketAdd
             return Err(err.into());
         }
     };
+
     match stream.write_all(&buffer[..4]).await
     {
         Ok(_) => (),
@@ -115,22 +119,30 @@ async fn send_ping_from_interface(interface_name: &str, remote_ip_addr:SocketAdd
             return Err(err);
         }
     };
-    
+    stream.write_all(&buffer[..4]).await.unwrap();
+
+    stream.flush().await.unwrap();
+
     info!("ping sent from interface {} to {}", interface_name, remote_ip_addr);
     let mut buf = [0; 1024];
-    tokio::select! {
-        _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "ping response is not received",
-            ));
-        }
-        Ok(len) = stream.read(&mut buf) => {
-            let response = str::from_utf8(&buf[..len]).unwrap();
-            if response != "pong" {
+    loop{
+        tokio::select! {
+            Ok(len) = stream.read(&mut buf) => {
+                let response = str::from_utf8(&buf[..len]).unwrap();
+                info!("ping response from interface {} is {}", interface_name, response);
+                if response != "pong" {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "ping response is not pong",
+                    ));
+                }else{
+                    break;
+                }
+            }
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(1000)) => {
                 return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "ping response is not pong",
+                    std::io::ErrorKind::TimedOut,
+                    "ping response is not received",
                 ));
             }
         }
@@ -188,22 +200,24 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 pub async fn opening_side_socket_handler(
     topic_gdp_name: GDPName, direction: String,
     fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
-    stream: UdpSocket, sock_public_addr:SocketAddr, config: fogrs_kcp::KcpConfig,
+    udp_socket: UdpSocket, sock_public_addr:SocketAddr, config: fogrs_kcp::KcpConfig,
 ) {
     
     let fib_tx_clone = fib_tx.clone();
     let channel_tx_clone = channel_tx.clone();
-    let mut listener = KcpListener::from_socket(config, stream).await.unwrap();
+    let mut listener = KcpListener::from_socket(config, udp_socket).await.unwrap();
+    info!("KCP listener is bound to {:?}", sock_public_addr);
     tokio::spawn(async move {
     loop {
-        info!("KCP listener is bound to {:?}", sock_public_addr);
-        let (stream, peer_addr) = match listener.accept().await {
+        let (mut stream, peer_addr) = match listener.accept().await {
             Ok(s) => s,
             Err(err) => {
                 error!("accept failed, error: {}", err);
-                return;
+                time::sleep(Duration::from_secs(1)).await;
+                continue;
             }
         };
+
         info!("accepted {}", peer_addr);
         let fib_tx_clone = fib_tx_clone.clone();
         let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
@@ -388,7 +402,7 @@ pub async fn register_stream_sender(
 
             let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
             // Bind the socket to a specific interface
-            bind_to_interface(&tokio_socket, interface);
+            bind_to_interface(&tokio_socket, interface).unwrap();
             // get stun address
             let sock_public_addr = match get_socket_stun(&tokio_socket).await {
                 Ok(addr) => {
@@ -400,17 +414,17 @@ pub async fn register_stream_sender(
                     continue;
                 }
             };
-            let _ = tokio::spawn(
-                opening_side_socket_handler(
-                    topic_gdp_name.clone(),
-                    direction.clone(),
-                    fib_tx.clone(),
-                    channel_tx.clone(),
-                    tokio_socket,
-                    sock_public_addr,
-                    config.clone(),
-                )
-            ).await;
+            // let _ = tokio::spawn(
+            //     opening_side_socket_handler(
+            //         topic_gdp_name.clone(),
+            //         direction.clone(),
+            //         fib_tx.clone(),
+            //         channel_tx.clone(),
+            //         tokio_socket,
+            //         sock_public_addr,
+            //         config.clone(),
+            //     ).await;
+            // ).await;
     }
     info!("candidates {:?}", candidate_struct);
 
@@ -509,7 +523,7 @@ pub async fn register_stream_receiver(
         let fib_tx_clone = fib_tx_clone.clone(); 
         let channel_tx_clone = channel_tx_clone.clone();
         // open a socket to the candidate
-        let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
+        let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
 
         // Bind the socket to a specific interface
         info!("UDP socket is bound to {:?} with device name {}", socket.local_addr().unwrap(), interface_name);
