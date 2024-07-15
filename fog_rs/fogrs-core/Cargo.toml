@@ -14,6 +14,7 @@ fogrs-utils = { path = "../fogrs-utils" }
 fogrs-ros = { path = "../fogrs-ros" }
 fogrs-common = { path = "../fogrs-common" }
 fogrs-kcp = { path = "../fogrs-kcp" }
+fogrs-signaling = { path = "../fogrs-signaling" }
 
 rand = "0.8.4"
 log = "0.4.14"

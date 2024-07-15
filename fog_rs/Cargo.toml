@@ -15,7 +15,7 @@ GDP Router
 members = [
     "fogrs-utils",
     "fogrs-core",
-    "signaling",
+    "fogrs-signaling",
     "fogrs-ros",
     "fogrs-common",
     "fogrs-kcp",
