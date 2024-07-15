@@ -95,12 +95,15 @@ fn gather_candidate_interfaces() -> Vec<String> {
 }
 
 async fn send_ping_from_interface(interface_name: &str, remote_ip_addr:SocketAddr) -> std::io::Result<()> {
-    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
+    // let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
 
-    let socket = UdpSocket::from_std(socket.into()).unwrap();
-    // TODO: bind to interface
+    // let socket = UdpSocket::from_std(socket.into()).unwrap();
+    // // TODO: bind to interface
+    // bind_to_interface(&socket, interface_name).unwrap();
+
+    let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
     bind_to_interface(&socket, interface_name).unwrap();
-
+    
     let buffer = b"ping";
     let mut stream = match KcpStream::connect_with_socket(&to_kcp_config("fast"),socket, remote_ip_addr).await
     {
@@ -398,11 +401,14 @@ pub async fn register_stream_sender(
     };
     for interface_name in candidate_interfaces {
             // open a socket to the candidate
-            let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
+            // let socket = Socket::new(Domain::IPV4, Type::DGRAM, None).unwrap();
 
-            let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
-            // Bind the socket to a specific interface
-            bind_to_interface(&tokio_socket, interface).unwrap();
+            // let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
+            // // Bind the socket to a specific interface
+            // bind_to_interface(&tokio_socket, interface).unwrap();
+
+            let tokio_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+            bind_to_interface(&tokio_socket, interface_name.as_str()).unwrap();
             // get stun address
             let sock_public_addr = match get_socket_stun(&tokio_socket).await {
                 Ok(addr) => {
@@ -523,13 +529,17 @@ pub async fn register_stream_receiver(
         let fib_tx_clone = fib_tx_clone.clone(); 
         let channel_tx_clone = channel_tx_clone.clone();
         // open a socket to the candidate
-        let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
+        // let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
 
-        // Bind the socket to a specific interface
-        info!("UDP socket is bound to {:?} with device name {}", socket.local_addr().unwrap(), interface_name);
+        // // Bind the socket to a specific interface
+        // info!("UDP socket is bound to {:?} with device name {}", socket.local_addr().unwrap(), interface_name);
         
-        let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
-        bind_to_interface(&tokio_socket, interface_name.as_str());
+        // let tokio_socket = UdpSocket::from_std(socket.into()).unwrap();
+        // bind_to_interface(&tokio_socket, interface_name.as_str());
+
+        let tokio_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+        bind_to_interface(&tokio_socket, interface_name.as_str()).unwrap();
+        
         // get stun address
         let sock_public_addr = match get_socket_stun(&tokio_socket).await {
             Ok(addr) => {
