@@ -54,7 +54,8 @@ pub async fn service_connection_fib_handler(
                                         info!("forwarding to {:?}", dst.description);
                                         match dst.tx.send(pkt.clone()) {
                                             Ok(_) => {
-                                                logger.log(format!("FORWARD, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
+                                                // logger.log(format!("FORWARD, {:?}, {:?}", pkt.guid, pkt.source));
+                                                info!("sent to {:?}", dst.description);
                                             },
                                             Err(e) => {
                                                 // .expect(format!();
