@@ -57,6 +57,9 @@ docker run --user $(id -u):$(id -g) -ti --net=host -v ~/rt-fogros2:/fog_ws/rt-fo
 The parameters such as user ID and group are used to make sure the built targets are readable and modifiable by the host. 
 
 ### Run Hello World Example 
+```
+RUSTFLAGS="--cfg tokio_unstable"  cargo run
+```
 On each terminal, run 
 ```
 export RUST_LOG=info && export ROS_DOMAIN_ID=3 && source install/setup.bash && ros2 launch bench benchmark.talker.launch.py 
