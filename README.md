@@ -58,15 +58,21 @@ The parameters such as user ID and group are used to make sure the built targets
 
 ### Run Hello World Example 
 ```
-RUSTFLAGS="--cfg tokio_unstable"  cargo run
+RUSTFLAGS="--cfg tokio_unstable"  cargo run config
 ```
 On each terminal, run 
 ```
-export RUST_LOG=info && export ROS_DOMAIN_ID=3 && source install/setup.bash && ros2 launch bench benchmark.talker.launch.py 
+export RUST_LOG=info && export ROS_DOMAIN_ID=3 && source install/setup.bash && ros2 launch bench talker.launch.py 
 ```
 and 
 ```
-export RUST_LOG=info && export ROS_DOMAIN_ID=2 && source install/setup.bash && ros2 launch bench benchmark.listener.launch.py 
+export RUST_LOG=info && export ROS_DOMAIN_ID=2 && source install/setup.bash && ros2 launch bench listener.launch.py 
+```
+
+
+```
+export RUST_LOG=info && export ROS_DOMAIN_ID=3 && source install/setup.bash && ros2 launch bench add.three.ints.service.launch.py
+export RUST_LOG=info && export ROS_DOMAIN_ID=2 && source install/setup.bash && ros2 launch bench add.three.ints.client.launch.py
 ```
 
 ### F&Q
