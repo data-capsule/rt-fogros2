@@ -10,6 +10,7 @@ use fogrs_common::packet_structs::{
 use fogrs_kcp::{to_kcp_config, KcpStream};
 use fogrs_kcp::KcpListener;
 use fogrs_ros::TopicManagerRequest;
+use fogrs_signaling::Message;
 use futures::StreamExt;
 use librice::candidate;
 use redis_async::client;
@@ -20,8 +21,8 @@ use tokio::time;
 use std::fmt::format;
 use std::net::SocketAddr;
 use std::time::Duration;
-use tokio::net::UdpSocket;
-
+use tokio::net::{TcpStream, UdpSocket};
+use fogrs_common::fib_structs::CandidateStruct;
 use core::panic;
 use std::str;
 use std::vec;
@@ -250,105 +251,6 @@ pub async fn opening_side_socket_handler(
     });
 }
 
-async fn sender_socket_handler(
-    topic_gdp_name: GDPName, receiver_key_name: String, sender_key_name: String, direction: String,
-    fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
-    stream: UdpSocket, sock_public_addr:SocketAddr, config: fogrs_kcp::KcpConfig,
-)
-{
-
-    // loop {
-    //     tokio::select! {
-    //     Some(message) = msgs.next() => {
-    //             info!("msg {:?}", message);
-    //             let received_operation = String::from_resp(message.unwrap()).unwrap();
-
-    //             if received_operation != "lpush" {
-    //                 info!("the operation is not lpush, ignore");
-    //                 continue;
-    //             }
-    //             let updated_receivers = get_entity_from_database(&redis_url, &receiver_key_name)
-    //                 .expect("Cannot get receiver from database");
-    //             info!("get a list of receivers from KVS {:?}", updated_receivers);
-    //             let new_receivers = updated_receivers
-    //                 .iter()
-    //                 .filter(|&r| !processed_receivers.contains(r))
-    //                 .collect::<Vec<_>>();
-
-    //             for receiver_channel in new_receivers { //format: sender_thread_gdp_name_str-receiver_thread_gdp_name_str
-    //                 info!("new receiver {:?}", receiver_channel);
-    //                 processed_receivers.push(receiver_channel.to_string());
-    //                 // check if value starts with sender_thread_gdp_name_str
-    //                 if !receiver_channel.starts_with(&sender_thread_gdp_name_str) {
-    //                     info!(
-    //                         "receiver_channel {:?}, not starting with {}",
-    //                         receiver_channel, sender_thread_gdp_name_str
-    //                     );
-    //                     continue;
-    //                 }
-
-    //                 // query value of key [sender_gdp_name, receiver_gdp_name] to be the receiver_addr
-    //                 let receiver_addr = &get_entity_from_database(&redis_url, &receiver_channel)
-    //                     .expect("Cannot get receiver from database")[0];
-    //                 info!("receiver_addr {:?}", receiver_addr);
-
-    //                 let receiver_socket_addr: SocketAddr = receiver_addr
-    //                     .parse()
-    //                     .expect("Failed to parse receiver address");
-
-    //                 let stream = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-
-    //                 bind_to_interface(&stream, interface).expect("Cannot bind to interface");
-
-    //                 if transmission_protocol == "kcp" {
-    //                     let _ = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
-    //                     info!("connected to {:?}", receiver_socket_addr);
-    //                 } else if transmission_protocol == "udp" {
-    //                     let _ = stream.connect(receiver_socket_addr).await;
-    //                 }
-
-    //                 let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
-    //                 let fib_clone = fib_tx.clone();
-    //                 tokio::spawn(async move {
-    //                     if transmission_protocol == "kcp" {
-    //                         let stream = fogrs_kcp::KcpStream::connect(&config, receiver_socket_addr).await.unwrap();
-    //                         info!("connected to {:?}", receiver_socket_addr);
-    //                         crate::network::kcp::reader_and_writer(
-    //                             stream,
-    //                             fib_clone,
-    //                             // ebpf_tx,
-    //                             local_to_net_rx,
-    //                         ).await;
-    //                     } else if transmission_protocol == "udp" {
-    //                         let _ = stream.connect(receiver_socket_addr).await;
-    //                         crate::network::udp::reader_and_writer(
-    //                             stream,
-    //                             fib_clone,
-    //                             // ebpf_tx,
-    //                             local_to_net_rx,
-    //                         ).await;
-    //                     }
-    //                 });
-    //                 // send to fib an update
-    //                 let channel_update_msg = FibStateChange {
-    //                     action: FibChangeAction::ADD,
-    //                     topic_gdp_name: topic_gdp_name,
-    //                     // here is a little bit tricky:
-    //                     //  to fib, it is the receiver
-    //                     // it connects to a remote receiver
-    //                     connection_type: direction_str_to_connection_type(flip_direction(direction).unwrap().as_str()),
-    //                     forward_destination: Some(local_to_net_tx),
-    //                     description: Some(format!(
-    //                         "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
-    //                         topic_gdp_name, receiver_addr, direction
-    //                     )),
-    //                 };
-    //                 let _ = channel_tx.send(channel_update_msg);
-    //             }
-
-    //         }
-}
-
 // protocol:
 // sender_manager() 
 // candidates <- init_candidates()
@@ -378,17 +280,17 @@ pub async fn register_stream_sender(
     );
     let thread_gdp_name = generate_random_gdp_name();
 
-    let redis_addr_and_port = get_redis_address_and_port();
-    let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-        .await
-        .expect("Cannot connect to Redis");
-    let redis_topic_stream_name: String = format!("__keyspace@0__:{}", receiver_key_name);
-    allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
-    let mut msgs = pubsub_con
-        .psubscribe(&redis_topic_stream_name)
-        .await
-        .expect("Cannot subscribe to topic");
-    info!("subscribed to {:?}", redis_topic_stream_name);
+    // let redis_addr_and_port = get_redis_address_and_port();
+    // let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
+    //     .await
+    //     .expect("Cannot connect to Redis");
+    // let redis_topic_stream_name: String = format!("__keyspace@0__:{}", receiver_key_name);
+    // allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
+    // let mut msgs = pubsub_con
+    //     .psubscribe(&redis_topic_stream_name)
+    //     .await
+    //     .expect("Cannot subscribe to topic");
+    // info!("subscribed to {:?}", redis_topic_stream_name);
 
 
     let candidate_interfaces = gather_candidate_interfaces();
@@ -417,26 +319,26 @@ pub async fn register_stream_sender(
                     continue;
                 }
             };
-            // let _ = tokio::spawn(
-            //     opening_side_socket_handler(
-            //         topic_gdp_name.clone(),
-            //         direction.clone(),
-            //         fib_tx.clone(),
-            //         channel_tx.clone(),
-            //         tokio_socket,
-            //         sock_public_addr,
-            //         config.clone(),
-            //     ).await;
-            // ).await;
+            let _ = tokio::spawn(
+                opening_side_socket_handler(
+                    topic_gdp_name.clone(),
+                    direction.clone(),
+                    fib_tx.clone(),
+                    channel_tx.clone(),
+                    tokio_socket,
+                    sock_public_addr,
+                    config.clone(),
+                )
+            );
     }
     info!("candidates {:?}", candidate_struct);
 
-    let receiver_candidates = get_entity_from_database(&redis_url, &receiver_key_name)
-        .expect("Cannot get sender from database");
-    info!(
-        "get a list of receivers from KVS {:?}",
-        receiver_candidates
-    );
+    // let receiver_candidates = get_entity_from_database(&redis_url, &receiver_key_name)
+    //     .expect("Cannot get sender from database");
+    // info!(
+    //     "get a list of receivers from KVS {:?}",
+    //     receiver_candidates
+    // );
 
     // let _ = add_entity_to_database_as_transaction(
     //     &redis_url,
@@ -448,8 +350,27 @@ pub async fn register_stream_sender(
     //     topic_gdp_name, candidate_struct
     // );
 
-    for receiver_candidate in receiver_candidates {
-        let receiver_struct: CandidateStruct = serde_json::from_str(&receiver_candidate).unwrap();
+    let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+    let request = Message {
+        command: "SUBSCRIBE".to_string(),
+        topic: receiver_key_name,
+        data: None,
+    };
+    let request = serde_json::to_string(&request).unwrap();
+    signaling_stream.write_all(request.as_bytes()).await.unwrap();
+
+    let mut buffer = [0; 1024];
+    loop {
+        let n = signaling_stream.read(&mut buffer).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        let str_buf = String::from_utf8_lossy(&buffer[..n]);
+        println!("{}", str_buf);
+        // let receiver_candidates_buf = buffer;
+        // let receiver_candidate = serde_json::from_slice(&buffer).unwrap();
+
+        let receiver_struct: CandidateStruct = serde_json::from_str(&str_buf).unwrap();
         info!("receiver_struct {:?}", receiver_struct);
         for candidate_addr in receiver_struct.candidates {
             let interface_to_latency = get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
@@ -495,7 +416,6 @@ pub async fn register_stream_sender(
             }
         }
     }
-
 }
 
 // protocol:
@@ -515,11 +435,6 @@ pub async fn register_stream_sender(
 // on_new_connection():
 // 	return with "PONG {ts}"
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct CandidateStruct {
-    thread_gdp_name: GDPName,
-    candidates: Vec<SocketAddr>,
-}
 
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
@@ -535,23 +450,25 @@ pub async fn register_stream_receiver(
     );
     let thread_gdp_name = generate_random_gdp_name();
 
-    let redis_addr_and_port = get_redis_address_and_port();
-    let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-        .await
-        .expect("Cannot connect to Redis");
-    let redis_topic_stream_name: String = format!("__keyspace@0__:{:}", sender_key_name);
-    // let redis_topic_stream_name: String = format!("__keyspace@0__:*");
-    allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
-    let mut msgs = pubsub_con
-        .psubscribe(&redis_topic_stream_name)
-        .await
-        .expect("Cannot subscribe to topic");
-    info!("subscribed to {:?}", redis_topic_stream_name);
+    // let redis_addr_and_port = get_redis_address_and_port();
+    // let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
+    //     .await
+    //     .expect("Cannot connect to Redis");
+    // let redis_topic_stream_name: String = format!("__keyspace@0__:{:}", sender_key_name);
+    // // let redis_topic_stream_name: String = format!("__keyspace@0__:*");
+    // allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
+    // let mut msgs = pubsub_con
+    //     .psubscribe(&redis_topic_stream_name)
+    //     .await
+    //     .expect("Cannot subscribe to topic");
+    // info!("subscribed to {:?}", redis_topic_stream_name);
 
-    info!(
-        "Attempting to subscribe to topic: {}",
-        redis_topic_stream_name
-    );
+    let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+
+    // info!(
+    //     "Attempting to subscribe to topic: {}",
+    //     redis_topic_stream_name
+    // );
 
     let candidate_interfaces = gather_candidate_interfaces();
     let mut candidate_struct = CandidateStruct {
@@ -604,31 +521,39 @@ pub async fn register_stream_receiver(
     info!("candidates {:?}", candidate_struct);
 
     // put value [candidates] to key {<topic_name>-receiver}
-    let _ = add_entity_to_database_as_transaction(
-        &redis_url,
-        &receiver_key_name,
-        serde_json::to_string(&candidate_struct).unwrap().as_str(),
-    );
-    info!(
-        "registered {:?} with {:?}",
-        topic_gdp_name, candidate_struct
-    );
+    // let _ = add_entity_to_database_as_transaction(
+    //     &redis_url,
+    //     &receiver_key_name,
+    //     serde_json::to_string(&candidate_struct).unwrap().as_str(),
+    // );
+    let request = Message {
+        command: "PUBLISH".to_string(),
+        topic: receiver_key_name,
+        data: Some(candidate_struct),
+    };
+    let request = serde_json::to_string(&request).unwrap();
+    signaling_stream.write_all(request.as_bytes()).await;
 
-    tokio::select! {
-        Some(message) = msgs.next() => {
-            info!("msg {:?}", message);
-            let received_operation = String::from_resp(message.unwrap()).unwrap();
+    // info!(
+    //     "registered {:?} with {:?}",
+    //     topic_gdp_name, candidate_struct
+    // );
 
-            if received_operation != "lpush" {
-                info!("the operation is not lpush, ignore");
-                return;
-            }
-            let updated_senders = get_entity_from_database(&redis_url, &sender_key_name)
-                .expect("Cannot get sender from database");
-            info!("get a list of senders from KVS {:?}", updated_senders);
+    // tokio::select! {
+    //     Some(message) = msgs.next() => {
+    //         info!("msg {:?}", message);
+    //         let received_operation = String::from_resp(message.unwrap()).unwrap();
 
-            }
-        }
+    //         if received_operation != "lpush" {
+    //             info!("the operation is not lpush, ignore");
+    //             return;
+    //         }
+    //         let updated_senders = get_entity_from_database(&redis_url, &sender_key_name)
+    //             .expect("Cannot get sender from database");
+    //         info!("get a list of senders from KVS {:?}", updated_senders);
+
+    //         }
+    //     }
 }
 
     // return;

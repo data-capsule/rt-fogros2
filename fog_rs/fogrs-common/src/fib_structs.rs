@@ -1,6 +1,12 @@
 use crate::packet_structs::{GDPName, GDPPacket};
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::{sync::mpsc::UnboundedSender};
+use std::net::SocketAddr;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CandidateStruct {
+    pub thread_gdp_name: GDPName,
+    pub candidates: Vec<SocketAddr>,
+}
 
 // Define your necessary structures and enums (e.g., GDPPacket, FibStateChange, etc.)
 

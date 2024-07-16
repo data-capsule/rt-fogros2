@@ -2,23 +2,25 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
-use tokio_stream::StreamExt;
-use serde::{Serialize, Deserialize};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use serde_json;
+use log::{error, info, warn};
+use std::io;
+use serde::{Serialize, Deserialize};
+use fogrs_common::fib_structs::CandidateStruct;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Message {
-    command: String,
-    topic: String,
-    data: Option<String>,
+    pub command: String,
+    pub topic: String,
+    pub data: Option<CandidateStruct>,
 }
 
 #[derive(Clone)]
 pub struct Topic {
-    name: String,
-    log: Arc<Mutex<VecDeque<(String, tokio::time::Instant)>>>,
-    sender: broadcast::Sender<String>,
+    pub name: String,
+    pub log: Arc<Mutex<VecDeque<(CandidateStruct, tokio::time::Instant)>>>,
+    pub sender: broadcast::Sender<CandidateStruct>,
 }
 
 impl Topic {
@@ -31,20 +33,32 @@ impl Topic {
         }
     }
 
-    async fn publish(&self, message: String) {
+    async fn publish(&self, message: CandidateStruct) {
+        info!("Publishing message to topic {}: {:?}", self.name, message);
+        info!("current log: {:?}", self.log.lock().await);
         let mut log = self.log.lock().await;
         log.push_back((message.clone(), tokio::time::Instant::now()));
-        self.sender.send(message).unwrap();
+        if self.sender.receiver_count() > 0 {
+            if let Err(e) = self.sender.send(message) {
+                error!("Error broadcasting message: {}", e);
+            }
+        } else {
+            warn!("No subscribers to topic {}", self.name);
+        }
     }
 
     async fn subscribe(&self, mut stream: TcpStream) {
+        info!("New subscriber to topic {}", self.name);
         let mut rx = self.sender.subscribe();
         let log = self.log.lock().await.clone();
 
         // Stream the log to the subscriber
         for (msg, _) in log {
             let response = serde_json::to_string(&msg).unwrap();
-            stream.write_all(response.as_bytes()).await.unwrap();
+            if let Err(e) = stream.write_all(response.as_bytes()).await {
+                error!("Error sending log message: {}", e);
+                return;
+            }
         }
 
         // Stream new messages to the subscriber
@@ -52,9 +66,14 @@ impl Topic {
             match rx.recv().await {
                 Ok(msg) => {
                     let response = serde_json::to_string(&msg).unwrap();
-                    stream.write_all(response.as_bytes()).await.unwrap();
+                    if let Err(e) = stream.write_all(response.as_bytes()).await {
+                        error!("Error sending TCP message: {}", e);
+                        return;
+                    }
                 }
-                Err(_) => break,
+                Err(_) => {
+                    warn!("Subscriber disconnected from topic {}", self.name);
+                },
             }
         }
     }
@@ -73,9 +92,23 @@ impl Server {
 
     pub async fn handle_client(self: Arc<Self>, mut stream: TcpStream) {
         let mut buffer = [0; 1024];
-        stream.read(&mut buffer).await.unwrap();
-        let request = String::from_utf8(buffer.to_vec()).unwrap();
-        let message: Message = serde_json::from_str(&request).unwrap();
+        if let Err(e) = stream.read(&mut buffer).await {
+            error!("Error reading from stream: {}", e);
+            return;
+        }
+        info!("Received request: {}", String::from_utf8_lossy(&buffer));
+        let request = match String::from_utf8_lossy(&buffer).trim_matches(char::from(0)) {
+            "" => return,
+            s => s.to_string(),
+        };
+
+        let message: Message = match serde_json::from_str(&request) {
+            Ok(msg) => msg,
+            Err(e) => {
+                error!("Error deserializing message: {}", e);
+                return;
+            }
+        };
 
         let mut topics = self.topics.lock().await;
 
@@ -101,12 +134,15 @@ impl Server {
                     topic.subscribe(stream).await;
                 }
             }
-            _ => {}
+            _ => {
+                error!("Unknown command: {}", message.command);
+            }
         }
     }
 
     pub async fn run(self: Arc<Self>, addr: &str) {
         let listener = TcpListener::bind(addr).await.unwrap();
+        info!("Server running on {}", addr);
 
         loop {
             let (stream, _) = listener.accept().await.unwrap();
@@ -117,36 +153,36 @@ impl Server {
         }
     }
 }
+// pub async fn publish(topic: &str, message: &str) -> io::Result<()> {
+//     let mut stream = TcpStream::connect("127.0.0.1:8080").await?;
+//     let request = Message {
+//         command: "PUBLISH".to_string(),
+//         topic: topic.to_string(),
+//         data: Some(message.to_string()),
+//     };
+//     let request = serde_json::to_string(&request).unwrap();
+//     stream.write_all(request.as_bytes()).await?;
+//     Ok(())
+// }
 
-pub async fn publish(topic: &str, message: &str) -> io::Result<()> {
-    let mut stream = TcpStream::connect("127.0.0.1:8080").await?;
-    let request = Message {
-        command: "PUBLISH".to_string(),
-        topic: topic.to_string(),
-        data: Some(message.to_string()),
-    };
-    let request = serde_json::to_string(&request).unwrap();
-    stream.write_all(request.as_bytes()).await?;
-    Ok(())
-}
+// pub async fn subscribe(topic: &str) -> io::Result<()> {
+//     let mut stream = TcpStream::connect("127.0.0.1:8080").await?;
+//     let request = Message {
+//         command: "SUBSCRIBE".to_string(),
+//         topic: topic.to_string(),
+//         data: None,
+//     };
+//     let request = serde_json::to_string(&request).unwrap();
+//     stream.write_all(request.as_bytes()).await?;
 
-pub async fn subscribe(topic: &str) -> io::Result<()> {
-    let mut stream = TcpStream::connect("127.0.0.1:8080").await?;
-    let request = Message {
-        command: "SUBSCRIBE".to_string(),
-        topic: topic.to_string(),
-        data: None,
-    };
-    let request = serde_json::to_string(&request).unwrap();
-    stream.write_all(request.as_bytes()).await?;
+//     let mut buffer = [0; 1024];
+//     loop {
+//         let n = stream.read(&mut buffer).await?;
+//         if n == 0 {
+//             break;
+//         }
+//         println!("{}", String::from_utf8_lossy(&buffer[..n]));
+//     }
+//     Ok(())
+// }
 
-    let mut buffer = [0; 1024];
-    loop {
-        let n = stream.read(&mut buffer).await?;
-        if n == 0 {
-            break;
-        }
-        println!("{}", String::from_utf8_lossy(&buffer[..n]));
-    }
-    Ok(())
-}
