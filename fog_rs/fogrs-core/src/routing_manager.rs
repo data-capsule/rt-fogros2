@@ -13,6 +13,7 @@ use fogrs_ros::TopicManagerRequest;
 use fogrs_signaling::Message;
 use futures::StreamExt;
 use librice::candidate;
+use openssl::sign;
 use redis_async::client;
 use redis_async::resp::FromResp;
 use serde::{Deserialize, Serialize};
@@ -279,19 +280,17 @@ pub async fn register_stream_sender(
         flip_direction(direction.as_str()).unwrap()
     );
     let thread_gdp_name = generate_random_gdp_name();
+    let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
 
-    // let redis_addr_and_port = get_redis_address_and_port();
-    // let pubsub_con = client::pubsub_connect(redis_addr_and_port.0, redis_addr_and_port.1)
-    //     .await
-    //     .expect("Cannot connect to Redis");
-    // let redis_topic_stream_name: String = format!("__keyspace@0__:{}", receiver_key_name);
-    // allow_keyspace_notification(&redis_url).expect("Cannot allow keyspace notification");
-    // let mut msgs = pubsub_con
-    //     .psubscribe(&redis_topic_stream_name)
-    //     .await
-    //     .expect("Cannot subscribe to topic");
-    // info!("subscribed to {:?}", redis_topic_stream_name);
-
+    info!("subscribed to {:?}", receiver_key_name);
+    let request = Message {
+        command: "SUBSCRIBE".to_string(),
+        topic: receiver_key_name,
+        data: None,
+    };
+    let request = serde_json::to_string(&request).unwrap();
+    signaling_stream.write_all(request.as_bytes()).await.unwrap();
+    // signaling_stream.flush().await.unwrap();
 
     let candidate_interfaces = gather_candidate_interfaces();
     let mut candidate_struct = CandidateStruct {
@@ -333,31 +332,19 @@ pub async fn register_stream_sender(
     }
     info!("candidates {:?}", candidate_struct);
 
-    // let receiver_candidates = get_entity_from_database(&redis_url, &receiver_key_name)
-    //     .expect("Cannot get sender from database");
-    // info!(
-    //     "get a list of receivers from KVS {:?}",
-    //     receiver_candidates
-    // );
-
-    // let _ = add_entity_to_database_as_transaction(
-    //     &redis_url,
-    //     &sender_key_name,
-    //     serde_json::to_string(&candidate_struct).unwrap().as_str(),
-    // );
-    // info!(
-    //     "registered {:?} with {:?}",
-    //     topic_gdp_name, candidate_struct
-    // );
-
-    let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+    let mut publish_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
     let request = Message {
-        command: "SUBSCRIBE".to_string(),
-        topic: receiver_key_name,
-        data: None,
+        command: "PUBLISH".to_string(),
+        topic: sender_key_name,
+        data: Some(candidate_struct),
     };
-    let request = serde_json::to_string(&request).unwrap();
-    signaling_stream.write_all(request.as_bytes()).await.unwrap();
+    let mut request = serde_json::to_string(&request).unwrap();
+    // request.push('\n');
+    publish_stream.write_all(request.as_bytes()).await;
+    info!("sent to signaling server {:?}", request);
+    publish_stream.flush().await.unwrap();
+    publish_stream.shutdown().await.unwrap();
+    
 
     let mut buffer = [0; 1024];
     loop {
@@ -464,11 +451,20 @@ pub async fn register_stream_receiver(
     // info!("subscribed to {:?}", redis_topic_stream_name);
 
     let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
-
     // info!(
     //     "Attempting to subscribe to topic: {}",
     //     redis_topic_stream_name
     // );
+    info!("subscribed to {:?}", sender_key_name);
+    let request = Message {
+        command: "SUBSCRIBE".to_string(),
+        topic: sender_key_name,
+        data: None,
+    };
+    let request = serde_json::to_string(&request).unwrap();
+    signaling_stream.write_all(request.as_bytes()).await.unwrap();
+    // signaling_stream.flush().await.unwrap();
+
 
     let candidate_interfaces = gather_candidate_interfaces();
     let mut candidate_struct = CandidateStruct {
@@ -520,51 +516,90 @@ pub async fn register_stream_receiver(
     }
     info!("candidates {:?}", candidate_struct);
 
+    let mut publish_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+    let request = Message {
+        command: "PUBLISH".to_string(),
+        topic: receiver_key_name,
+        data: Some(candidate_struct),
+    };
+    let mut request = serde_json::to_string(&request).unwrap();
+    // request.push('\n');
+    publish_stream.write_all(request.as_bytes()).await;
+    info!("sent to signaling server {:?}", request);
+    publish_stream.flush().await.unwrap();
+    publish_stream.shutdown().await.unwrap();
+    
+
     // put value [candidates] to key {<topic_name>-receiver}
     // let _ = add_entity_to_database_as_transaction(
     //     &redis_url,
     //     &receiver_key_name,
     //     serde_json::to_string(&candidate_struct).unwrap().as_str(),
     // );
-    let request = Message {
-        command: "PUBLISH".to_string(),
-        topic: receiver_key_name,
-        data: Some(candidate_struct),
-    };
-    let request = serde_json::to_string(&request).unwrap();
-    signaling_stream.write_all(request.as_bytes()).await;
 
-    // info!(
-    //     "registered {:?} with {:?}",
-    //     topic_gdp_name, candidate_struct
-    // );
+    // signaling_stream.flush().await.unwrap();
 
-    // tokio::select! {
-    //     Some(message) = msgs.next() => {
-    //         info!("msg {:?}", message);
-    //         let received_operation = String::from_resp(message.unwrap()).unwrap();
 
-    //         if received_operation != "lpush" {
-    //             info!("the operation is not lpush, ignore");
-    //             return;
-    //         }
-    //         let updated_senders = get_entity_from_database(&redis_url, &sender_key_name)
-    //             .expect("Cannot get sender from database");
-    //         info!("get a list of senders from KVS {:?}", updated_senders);
 
-    //         }
-    //     }
+    let mut buffer = [0; 1024];
+    loop {
+        info!("waiting for message");
+        let n = signaling_stream.read(&mut buffer).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        let str_buf = String::from_utf8_lossy(&buffer[..n]);
+        println!("{}", str_buf);
+        // let receiver_candidates_buf = buffer;
+        // let receiver_candidate = serde_json::from_slice(&buffer).unwrap();
+
+        let receiver_struct: CandidateStruct = serde_json::from_str(&str_buf).unwrap();
+        info!("receiver_struct {:?}", receiver_struct);
+        for candidate_addr in receiver_struct.candidates {
+            let interface_to_latency = get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
+            info!("interface_to_latency {:?}", interface_to_latency);
+            
+            // forward from the interface to 
+
+            for (interface_name, latency) in interface_to_latency {
+                let direction = direction.clone();
+
+                let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+                bind_to_interface(&socket, interface_name.as_str()).unwrap();
+
+                let _ = fogrs_kcp::KcpStream::connect(&config, candidate_addr).await.unwrap();
+                let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                let fib_clone = fib_tx.clone();
+                tokio::spawn(async move {
+                    let stream = fogrs_kcp::KcpStream::connect(&config, candidate_addr).await.unwrap();
+                    info!("connected to {:?}", candidate_addr);
+                    crate::network::kcp::reader_and_writer(
+                        stream,
+                        fib_clone,
+                        // ebpf_tx,
+                        local_to_net_rx,
+                    ).await;
+                });
+                // send to fib an update
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::ADD,
+                    topic_gdp_name: topic_gdp_name,
+                    // here is a little bit tricky:
+                    //  to fib, it is the receiver
+                    // it connects to a remote receiver
+                    connection_type: direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
+                    forward_destination: Some(local_to_net_tx),
+                    description: Some(format!(
+                        "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
+                        topic_gdp_name, candidate_addr, direction
+                    )),
+                };
+                let _ = channel_tx.send(channel_update_msg);
+            }
+        }
+    }
 }
 
-    // return;
-    // let current_value_under_key = get_entity_from_database(&redis_url, &sender_key_name)
-    //     .expect("Cannot get sender from database");
-    // info!(
-    //     "get a list of senders from KVS {:?}",
-    //     current_value_under_key
-    // );
-
-    // let mut processed_senders = vec![];
 
 
 #[derive(Clone)]

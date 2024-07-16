@@ -52,7 +52,15 @@ pub async fn service_connection_fib_handler(
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
                                         info!("forwarding to {:?}", dst.description);
-                                        dst.tx.send(pkt.clone()).unwrap();
+                                        match dst.tx.send(pkt.clone()) {
+                                            Ok(_) => {
+                                                logger.log(format!("FORWARD, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
+                                            },
+                                            Err(e) => {
+                                                // .expect(format!();
+                                                warn!("failed to send to {:?}", dst.description);
+                                            }
+                                        }
                                     } else {
                                         warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
                                     }
