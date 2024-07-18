@@ -222,11 +222,18 @@ pub async fn opening_side_socket_handler(
 
         info!("accepted {}", peer_addr);
         let fib_tx_clone = fib_tx_clone.clone();
-        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+        
         // let direction = direction.clone();
         let channel_tx_clone = channel_tx_clone.clone();
+        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();  
 
-        error!("TODO: implement the logic for the remote sender, need to know topic name and direction");        
+        error!("TODO: implement the logic for the remote sender, need to know topic name and direction");      
+
+        tokio::spawn(async move {
+            crate::network::kcp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx)
+                 .await;
+        });
+        
         // tokio::spawn(async move {
         //     let channel_update_msg = FibStateChange {
         //         action: FibChangeAction::ADD,
@@ -255,47 +262,195 @@ pub async fn opening_side_socket_handler(
 
 
 
-// protocol:
-// receiving: determining which side should open the socket for a connection
-// sending: selecting top K interfaces to send a message
-
-// key: {<topic_name>-sender}, value: [a list of [candidates for a sender]]
-// key: {<topic_name>-receiver}, value: [a list of [candidates for a receiver]]
-
-// receiver_manager()
-// candidates <- init_candidates()
-// append (GDPNAME, [candidates]) to {<topic_name>-receiver}
-// subscribe to {<topic_name>-sender}
-// on_new_sender(): 
-// 	connect to candidates in sender 
-// 	await PING 
-// on_new_connection():
-// 	return with "PONG {ts}"
-
-// protocol:
-// sender_manager() 
-// candidates <- init_candidates()
-// append (GDPNAME, [candidates]) to {<topic_name>-sender}
-// subscribe to {<topic_name>-receiver}
-
-// on_new_connection_to_candidates():
-// 	send "PING {ts}"; await response
-// 	if PONG -> inform RIB a connectivity option 
-	
-// on_new_receiver():
-// 	connect to candidates in receiver
-// 	// sender needs to make sure receiver can receive it 
-// 	send "PING {ts}"; await response 
-// 	if PONG -> inform RIB a connectivity option 
 
 
-pub async fn register_stream(
-    topic_gdp_name: GDPName, direction: String, candidate_struct:CandidateStruct,fib_tx: UnboundedSender<GDPPacket>,
+pub async fn register_stream_sender(
+    topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
     // let direction: &str = direction.as_str();
 
     let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+
+    let thread_gdp_name = generate_random_gdp_name();
+    let candidate_interfaces = gather_candidate_interfaces();
+    let mut candidate_struct = CandidateStruct {
+        thread_gdp_name: thread_gdp_name.clone(),
+        candidates: vec![],
+    };
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
+    for interface_name in candidate_interfaces {
+        // let direction_clone = direction.clone();
+        let fib_tx_clone = fib_tx_clone.clone(); 
+        let channel_tx_clone = channel_tx_clone.clone();
+
+        let tokio_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+        bind_to_interface(&tokio_socket, interface_name.as_str()).unwrap();
+        
+        // get stun address
+        let sock_public_addr = match get_socket_stun(&tokio_socket).await {
+            Ok(addr) => {
+                candidate_struct.candidates.push(addr);
+                addr
+            },
+            Err(err) => {
+                warn!("Address {:?} is not reachable as socket, error: {}", interface_name, err);
+                continue;
+            }
+        };
+        let _ = tokio::spawn(
+            async move{
+                opening_side_socket_handler(
+                    // topic_gdp_name.clone(),
+                    // direction_clone.clone(),
+                    fib_tx_clone,
+                    channel_tx_clone,
+                    tokio_socket,
+                    sock_public_addr,
+                    config.clone(),
+                ).await;
+            }
+        );
+    }
+    info!("candidates {:?}", candidate_struct);
+
+    let request = Message {
+        command: "SUBSCRIBE".to_string(),
+        topic: format!("{}-{:}", topic_gdp_name, flip_direction(&direction).unwrap()),
+        data: None,
+    };
+    let request = serde_json::to_string(&request).unwrap();
+    signaling_stream.write_all(request.as_bytes()).await.unwrap();
+    // signaling_stream.flush().await.unwrap();
+
+    let mut publish_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+    let request = Message {
+        command: "PUBLISH".to_string(),
+        topic: format!("{}-{:}", topic_gdp_name, &direction),
+        data: Some(candidate_struct),
+    };
+    let mut request = serde_json::to_string(&request).unwrap();
+    // request.push('\n');
+    publish_stream.write_all(request.as_bytes()).await;
+    info!("sent to signaling server {:?}", request);
+    publish_stream.flush().await.unwrap();
+    publish_stream.shutdown().await.unwrap();
+
+
+    let mut buffer = [0; 1024];
+    loop {
+        info!("waiting for message");
+        let n = signaling_stream.read(&mut buffer).await.unwrap();
+        if n == 0 {
+            break;
+        }
+        let str_buf = String::from_utf8_lossy(&buffer[..n]);
+        println!("{}", str_buf);
+        // let receiver_candidates_buf = buffer;
+        // let receiver_candidate = serde_json::from_slice(&buffer).unwrap();
+
+        let receiver_struct: CandidateStruct = serde_json::from_str(&str_buf).unwrap();
+        info!("receiver_struct {:?}", receiver_struct);
+        for candidate_addr in receiver_struct.candidates {
+            let interface_to_latency = get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
+            info!("interface_to_latency {:?}", interface_to_latency);
+            
+            // forward from the interface to 
+
+            for (interface_name, latency) in interface_to_latency {
+                let direction = direction.clone();
+
+                let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+                bind_to_interface(&socket, interface_name.as_str()).unwrap();
+
+                let _ = fogrs_kcp::KcpStream::connect(&config, candidate_addr).await.unwrap();
+                let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                let fib_clone = fib_tx.clone();
+                tokio::spawn(async move {
+                    let stream = fogrs_kcp::KcpStream::connect(&config, candidate_addr).await.unwrap();
+                    info!("connected to {:?}", candidate_addr);
+                    crate::network::kcp::reader_and_writer(
+                        stream,
+                        fib_clone,
+                        // ebpf_tx,
+                        local_to_net_rx,
+                    ).await;
+                });
+                // send to fib an update
+                let channel_update_msg = FibStateChange {
+                    action: FibChangeAction::ADD,
+                    topic_gdp_name: topic_gdp_name,
+                    // here is a little bit tricky:
+                    //  to fib, it is the receiver
+                    // it connects to a remote receiver
+                    connection_type: direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
+                    forward_destination: Some(local_to_net_tx),
+                    description: Some(format!(
+                        "udp stream sending for topic_name {:?} to address {:?} direction {:?}",
+                        topic_gdp_name, candidate_addr, direction
+                    )),
+                };
+                let _ = channel_tx.send(channel_update_msg);
+            }
+        }
+    }
+}
+
+
+
+pub async fn register_stream_receiver(
+    topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
+) {
+    // let direction: &str = direction.as_str();
+
+    let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+
+
+    let thread_gdp_name = generate_random_gdp_name();
+    let candidate_interfaces = gather_candidate_interfaces();
+    let mut candidate_struct = CandidateStruct {
+        thread_gdp_name: thread_gdp_name.clone(),
+        candidates: vec![],
+    };
+    let fib_tx_clone = fib_tx.clone();
+    let channel_tx_clone = channel_tx.clone();
+    for interface_name in candidate_interfaces {
+        // let direction_clone = direction.clone();
+        let fib_tx_clone = fib_tx_clone.clone(); 
+        let channel_tx_clone = channel_tx_clone.clone();
+
+        let tokio_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+        bind_to_interface(&tokio_socket, interface_name.as_str()).unwrap();
+        
+        // get stun address
+        let sock_public_addr = match get_socket_stun(&tokio_socket).await {
+            Ok(addr) => {
+                candidate_struct.candidates.push(addr);
+                addr
+            },
+            Err(err) => {
+                warn!("Address {:?} is not reachable as socket, error: {}", interface_name, err);
+                continue;
+            }
+        };
+        let _ = tokio::spawn(
+            async move{
+                opening_side_socket_handler(
+                    // topic_gdp_name.clone(),
+                    // direction_clone.clone(),
+                    fib_tx_clone,
+                    channel_tx_clone,
+                    tokio_socket,
+                    sock_public_addr,
+                    config.clone(),
+                ).await;
+            }
+        );
+    }
+    info!("candidates {:?}", candidate_struct);
+
     // info!(
     //     "Attempting to subscribe to topic: {}",
     //     redis_topic_stream_name
@@ -382,14 +537,11 @@ pub async fn register_stream(
     }
 }
 
-
-
 #[derive(Clone)]
 pub struct RoutingManager {
     // ebpf_tx: UnboundedSender<NewEbpfTopicRequest>,
     fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>,
-    candidate_struct: Option<CandidateStruct>,
 }
 
 impl RoutingManager {
@@ -402,57 +554,7 @@ impl RoutingManager {
             // ebpf_tx,
             fib_tx,
             channel_tx,
-            candidate_struct: None,
         }
-    }
-
-
-    pub async fn init_interfaces(
-        &mut self, config: fogrs_kcp::KcpConfig,
-    ){
-         let thread_gdp_name = generate_random_gdp_name();
-        let candidate_interfaces = gather_candidate_interfaces();
-        let mut candidate_struct = CandidateStruct {
-            thread_gdp_name: thread_gdp_name.clone(),
-            candidates: vec![],
-        };
-        let fib_tx_clone = self.fib_tx.clone();
-        let channel_tx_clone = self.channel_tx.clone();
-        for interface_name in candidate_interfaces {
-            // let direction_clone = direction.clone();
-            let fib_tx_clone = fib_tx_clone.clone(); 
-            let channel_tx_clone = channel_tx_clone.clone();
-
-            let tokio_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-            bind_to_interface(&tokio_socket, interface_name.as_str()).unwrap();
-            
-            // get stun address
-            let sock_public_addr = match get_socket_stun(&tokio_socket).await {
-                Ok(addr) => {
-                    candidate_struct.candidates.push(addr);
-                    addr
-                },
-                Err(err) => {
-                    warn!("Address {:?} is not reachable as socket, error: {}", interface_name, err);
-                    continue;
-                }
-            };
-            let _ = tokio::spawn(
-                async move{
-                    opening_side_socket_handler(
-                        // topic_gdp_name.clone(),
-                        // direction_clone.clone(),
-                        fib_tx_clone,
-                        channel_tx_clone,
-                        tokio_socket,
-                        sock_public_addr,
-                        config.clone(),
-                    ).await;
-                }
-            );
-        }
-        info!("candidates {:?}", candidate_struct);
-        self.candidate_struct = Some(candidate_struct);
     }
     
     pub async fn handle_sender_routing(
@@ -491,10 +593,9 @@ impl RoutingManager {
                     let channel_tx_clone = channel_tx.clone();
                     tokio::spawn(async move {
 
-                        register_stream(
+                        register_stream_sender(
                             topic_gdp_name,
                             direction,
-                            self.candidate_struct.clone().unwrap(),
                             fib_tx.clone(),
                             channel_tx_clone,
                             interface.as_str(),
@@ -561,10 +662,9 @@ impl RoutingManager {
                         let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                         let channel_tx_clone = channel_tx.clone();
 
-                        register_stream(
+                        register_stream_receiver(
                             topic_gdp_name,
                             direction,
-                            self.candidate_struct.clone().unwrap(),
                             fib_tx.clone(),
                             channel_tx_clone,
                             interface.as_str(),

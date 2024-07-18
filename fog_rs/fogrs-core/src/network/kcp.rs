@@ -101,13 +101,13 @@ pub async fn reader_and_writer(
                 info!("read {} bytes", receiving_buf_size);
 
                 // if it's ping, just return the pong
-                if receiving_buf_size == 4 && receiving_buf == vec![0x70, 0x69, 0x6e, 0x67]{
-                    info!("received a ping packet, assume ping is one time use");
-                    let pong = vec![0x70, 0x6f, 0x6e, 0x67];
-                    stream.write_all(&pong[..pong.len()]).await.unwrap();
-                    stream.flush().await.unwrap();
-                    break;
-                }
+                // if receiving_buf_size == 4 && receiving_buf == vec![0x70, 0x69, 0x6e, 0x67]{
+                //     info!("received a ping packet, assume ping is one time use");
+                //     let pong = vec![0x70, 0x6f, 0x6e, 0x67];
+                //     stream.write_all(&pong[..pong.len()]).await.unwrap();
+                //     stream.flush().await.unwrap(); 
+                //     break;
+                // }
 
                 let mut header_payload_pair = vec!();
 
