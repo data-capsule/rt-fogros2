@@ -1,13 +1,13 @@
+use fogrs_common::fib_structs::CandidateStruct;
+use log::{error, info, warn};
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::{HashMap, VecDeque};
+use std::io;
 use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use serde_json;
-use log::{error, info, warn};
-use std::io;
-use serde::{Serialize, Deserialize};
-use fogrs_common::fib_structs::CandidateStruct;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Message {
@@ -73,7 +73,7 @@ impl Topic {
                 }
                 Err(_) => {
                     warn!("Subscriber disconnected from topic {}", self.name);
-                },
+                }
             }
         }
     }
@@ -185,4 +185,3 @@ impl Server {
 //     }
 //     Ok(())
 // }
-

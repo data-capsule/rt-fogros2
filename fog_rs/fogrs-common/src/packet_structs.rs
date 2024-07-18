@@ -20,7 +20,7 @@ pub enum GdpAction {
     Control = 7,
     Request = 8,
     Response = 9,
-    PING = 10, 
+    PING = 10,
     PONG = 11,
 }
 

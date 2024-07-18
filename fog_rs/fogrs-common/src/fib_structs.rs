@@ -1,7 +1,7 @@
 use crate::packet_structs::{GDPName, GDPPacket};
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc::UnboundedSender};
 use std::net::SocketAddr;
+use tokio::sync::mpsc::UnboundedSender;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CandidateStruct {
     pub thread_gdp_name: GDPName,

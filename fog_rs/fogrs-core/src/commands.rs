@@ -7,9 +7,9 @@ use crate::api_server::ros_api_server;
 // use crate::_manager::ros_topic_manager;
 use futures::future;
 
+use fogrs_signaling::Server;
 use fogrs_utils::error::Result;
 use tokio::sync::mpsc;
-use fogrs_signaling::Server;
 
 
 /// TODO: later put to another file
@@ -52,13 +52,10 @@ pub fn router() -> Result<()> {
 }
 
 
-
 #[tokio::main]
 async fn run_async_signaling_server() {
-
     let server = Arc::new(Server::new());
     server.run("127.0.0.1:8080").await;
-
 }
 
 /// Show the configuration file
