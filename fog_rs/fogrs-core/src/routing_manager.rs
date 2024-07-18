@@ -216,6 +216,22 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 }
 
 
+// sender_manager()
+// candidates <- init_candidates()
+// initialize interfaces (candidates)
+// append (GDPNAME, [candidates]) to {<topic_name>-sender}
+// subscribe to {<topic_name>-receiver}
+
+// on_new_socket_connection_from_receivers():
+// 	send "PING"; await response
+// 	if PONG -> inform RIB a connectivity option
+
+// on_new_receiver():
+// 	connect to candidates in receiver
+// 	// sender needs to make sure receiver can receive it
+// 	send "PING"; await response
+// 	if PONG -> inform RIB a connectivity option
+
 pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
@@ -253,69 +269,54 @@ pub async fn register_stream_sender(
                 continue;
             }
         };
-        let _ = tokio::spawn(async move {
-            {
-                let fib_tx_clone = fib_tx_clone.clone();
-                let channel_tx_clone = channel_tx_clone.clone();
-                let direction_clone = direction_clone.clone();
-                let mut listener = KcpListener::from_socket(config, tokio_socket)
-                    .await
-                    .unwrap();
-                info!("KCP listener is bound to {:?}", sock_public_addr);
-                tokio::spawn(async move {
-                    loop {
-                        let (mut stream, peer_addr) = match listener.accept().await {
-                            Ok(s) => s,
-                            Err(err) => {
-                                error!("accept failed, error: {}", err);
-                                time::sleep(Duration::from_secs(1)).await;
-                                continue;
-                            }
-                        };
-
-                        info!("accepted {}", peer_addr);
-                        let fib_tx_clone = fib_tx_clone.clone();
-
-                        // let direction = direction.clone();
-                        let channel_tx_clone = channel_tx_clone.clone();
-                        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
-                        let direction_clone = direction_clone.clone();
-                        tokio::spawn(async move {
-                            let channel_update_msg = FibStateChange {
-                                action: FibChangeAction::ADD,
-                                topic_gdp_name: topic_gdp_name,
-                                // connection_type: direction_str_to_connection_type(direction.as_str()), // it connects from a remote sender
-                                // here is a little bit tricky: 
-                                //  to fib, it is the receiver
-                                // it connects to a remote receiver
-                                connection_type: direction_str_to_connection_type(flip_direction(direction_clone.as_str()).unwrap().as_str()),
-                                forward_destination: Some(local_to_net_tx),
-                                description: Some(format!(
-                                    "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} from {:?} direction {:?}",
-                                    topic_gdp_name, sock_public_addr, peer_addr, direction_clone,
-                                )),
-                            };
-                            channel_tx_clone
-                                .send(channel_update_msg)
-                                .expect("Cannot send channel update message");
-                            crate::network::kcp::reader_and_writer(
-                                stream,
-                                fib_tx_clone,
-                                local_to_net_rx,
-                            )
-                            .await;
-                        });
+        let mut listener = KcpListener::from_socket(config, tokio_socket)
+            .await
+            .unwrap();
+        info!("KCP listener is bound to {:?}", sock_public_addr);
+        tokio::spawn(async move {
+            loop {
+                let (mut stream, peer_addr) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(err) => {
+                        error!("accept failed, error: {}", err);
+                        time::sleep(Duration::from_secs(1)).await;
+                        continue;
                     }
+                };
+
+                info!("accepted {}", peer_addr);
+                let fib_tx_clone = fib_tx_clone.clone();
+
+                // let direction = direction.clone();
+                let channel_tx_clone = channel_tx_clone.clone();
+                let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                let direction_clone = direction_clone.clone();
+                tokio::spawn(async move {
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::ADD,
+                        topic_gdp_name: topic_gdp_name,
+                        // connection_type: direction_str_to_connection_type(direction.as_str()), // it connects from a remote sender
+                        // here is a little bit tricky: 
+                        //  to fib, it is the receiver
+                        // it connects to a remote receiver
+                        connection_type: direction_str_to_connection_type(flip_direction(direction_clone.as_str()).unwrap().as_str()),
+                        forward_destination: Some(local_to_net_tx),
+                        description: Some(format!(
+                            "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} from {:?} direction {:?}",
+                            topic_gdp_name, sock_public_addr, peer_addr, direction_clone,
+                        )),
+                    };
+                    channel_tx_clone
+                        .send(channel_update_msg)
+                        .expect("Cannot send channel update message");
+                    crate::network::kcp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx)
+                        .await;
                 });
             }
         });
     }
     info!("candidates {:?}", candidate_struct);
 
-    // info!(
-    //     "Attempting to subscribe to topic: {}",
-    //     redis_topic_stream_name
-    // );
     let request = Message {
         command: "SUBSCRIBE".to_string(),
         topic: format!(
@@ -349,6 +350,7 @@ pub async fn register_stream_sender(
     let fib_tx = fib_tx.clone();
     let channel_tx = channel_tx.clone();
     let mut buffer = [0; 1024];
+
     loop {
         info!("waiting for message");
         let n = signaling_stream.read(&mut buffer).await.unwrap();
@@ -368,8 +370,6 @@ pub async fn register_stream_sender(
             let interface_to_latency =
                 get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
             info!("interface_to_latency {:?}", interface_to_latency);
-
-            // forward from the interface to
 
             for (interface_name, latency) in interface_to_latency {
                 let direction = direction.clone();
@@ -466,69 +466,54 @@ pub async fn register_stream_receiver(
                 continue;
             }
         };
-        let _ = tokio::spawn(async move {
-            {
-                let fib_tx_clone = fib_tx_clone.clone();
-                let channel_tx_clone = channel_tx_clone.clone();
-                let direction_clone = direction_clone.clone();
-                let mut listener = KcpListener::from_socket(config, tokio_socket)
-                    .await
-                    .unwrap();
-                info!("KCP listener is bound to {:?}", sock_public_addr);
-                tokio::spawn(async move {
-                    loop {
-                        let (mut stream, peer_addr) = match listener.accept().await {
-                            Ok(s) => s,
-                            Err(err) => {
-                                error!("accept failed, error: {}", err);
-                                time::sleep(Duration::from_secs(1)).await;
-                                continue;
-                            }
-                        };
-
-                        info!("accepted {}", peer_addr);
-                        let fib_tx_clone = fib_tx_clone.clone();
-
-                        // let direction = direction.clone();
-                        let channel_tx_clone = channel_tx_clone.clone();
-                        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
-                        let direction_clone = direction_clone.clone();
-                        tokio::spawn(async move {
-                            let channel_update_msg = FibStateChange {
-                                action: FibChangeAction::ADD,
-                                topic_gdp_name: topic_gdp_name,
-                                // connection_type: direction_str_to_connection_type(direction.as_str()), // it connects from a remote sender
-                                // here is a little bit tricky: 
-                                //  to fib, it is the receiver
-                                // it connects to a remote receiver
-                                connection_type: direction_str_to_connection_type(flip_direction(direction_clone.as_str()).unwrap().as_str()),
-                                forward_destination: Some(local_to_net_tx),
-                                description: Some(format!(
-                                    "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} from {:?} direction {:?}",
-                                    topic_gdp_name, sock_public_addr, peer_addr, direction_clone,
-                                )),
-                            };
-                            channel_tx_clone
-                                .send(channel_update_msg)
-                                .expect("Cannot send channel update message");
-                            crate::network::kcp::reader_and_writer(
-                                stream,
-                                fib_tx_clone,
-                                local_to_net_rx,
-                            )
-                            .await;
-                        });
+        let mut listener = KcpListener::from_socket(config, tokio_socket)
+            .await
+            .unwrap();
+        info!("KCP listener is bound to {:?}", sock_public_addr);
+        tokio::spawn(async move {
+            loop {
+                let (mut stream, peer_addr) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(err) => {
+                        error!("accept failed, error: {}", err);
+                        time::sleep(Duration::from_secs(1)).await;
+                        continue;
                     }
+                };
+
+                info!("accepted {}", peer_addr);
+                let fib_tx_clone = fib_tx_clone.clone();
+
+                // let direction = direction.clone();
+                let channel_tx_clone = channel_tx_clone.clone();
+                let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                let direction_clone = direction_clone.clone();
+                tokio::spawn(async move {
+                    let channel_update_msg = FibStateChange {
+                        action: FibChangeAction::ADD,
+                        topic_gdp_name: topic_gdp_name,
+                        // connection_type: direction_str_to_connection_type(direction.as_str()), // it connects from a remote sender
+                        // here is a little bit tricky: 
+                        //  to fib, it is the receiver
+                        // it connects to a remote receiver
+                        connection_type: direction_str_to_connection_type(flip_direction(direction_clone.as_str()).unwrap().as_str()),
+                        forward_destination: Some(local_to_net_tx),
+                        description: Some(format!(
+                            "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} from {:?} direction {:?}",
+                            topic_gdp_name, sock_public_addr, peer_addr, direction_clone,
+                        )),
+                    };
+                    channel_tx_clone
+                        .send(channel_update_msg)
+                        .expect("Cannot send channel update message");
+                    crate::network::kcp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx)
+                        .await;
                 });
             }
         });
     }
     info!("candidates {:?}", candidate_struct);
 
-    // info!(
-    //     "Attempting to subscribe to topic: {}",
-    //     redis_topic_stream_name
-    // );
     let request = Message {
         command: "SUBSCRIBE".to_string(),
         topic: format!(
@@ -562,6 +547,7 @@ pub async fn register_stream_receiver(
     let fib_tx = fib_tx.clone();
     let channel_tx = channel_tx.clone();
     let mut buffer = [0; 1024];
+
     loop {
         info!("waiting for message");
         let n = signaling_stream.read(&mut buffer).await.unwrap();
@@ -581,8 +567,6 @@ pub async fn register_stream_receiver(
             let interface_to_latency =
                 get_latency_for_remote_ip_addr_from_all_interfaces(candidate_addr).await;
             info!("interface_to_latency {:?}", interface_to_latency);
-
-            // forward from the interface to
 
             for (interface_name, latency) in interface_to_latency {
                 let direction = direction.clone();
@@ -629,6 +613,7 @@ pub async fn register_stream_receiver(
         }
     }
 }
+
 
 #[derive(Clone)]
 pub struct RoutingManager {
