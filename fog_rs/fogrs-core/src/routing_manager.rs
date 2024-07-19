@@ -534,6 +534,7 @@ pub async fn register_stream_receiver(
                         .expect("Cannot send channel update message");
                     crate::network::kcp::reader_and_writer(stream, fib_tx_clone, local_to_net_rx)
                         .await;
+                    warn!("kcp reader and writer finished");
                 });
             }
         });
