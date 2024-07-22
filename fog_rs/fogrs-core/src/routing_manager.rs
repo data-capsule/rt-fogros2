@@ -311,7 +311,7 @@ pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
-    let mut signaling_stream = TcpStream::connect("127.0.0.1:8080").await.expect("Cannot connect to signaling server. Is it started?");
+    let mut signaling_stream = TcpStream::connect("128.32.37.36:8080").await.expect("Cannot connect to signaling server. Is it started?");
 
     let thread_gdp_name = generate_random_gdp_name();
     let candidate_interfaces = gather_candidate_interfaces();
@@ -392,7 +392,7 @@ pub async fn register_stream_sender(
         .unwrap();
     // signaling_stream.flush().await.unwrap();
 
-    let mut publish_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+    let mut publish_stream = TcpStream::connect("128.32.37.36:8080").await.unwrap();
     let request = Message {
         command: "PUBLISH".to_string(),
         topic: format!("{}-{:}", topic_gdp_name, &direction),
@@ -576,7 +576,7 @@ pub async fn register_stream_receiver(
         .unwrap();
     // signaling_stream.flush().await.unwrap();
 
-    let mut publish_stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
+    let mut publish_stream = TcpStream::connect("128.32.37.36:8080").await.unwrap();
     let request = Message {
         command: "PUBLISH".to_string(),
         topic: format!("{}-{:}", topic_gdp_name, &direction),
