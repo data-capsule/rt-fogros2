@@ -251,28 +251,32 @@ async fn handle_stream_sender(
     stream.flush().await.unwrap();
 
     let mut buf = [0; 1024];
-    let len = stream.read(&mut buf).await.unwrap();
-    let response = str::from_utf8(&buf[..len]).unwrap();
-    if response != "pong" {
-        return;
-    }else{
-        info!("ping response from {} {} is {}", peer_addr, interface, response);
-    }
-    // 
-    // tokio::select! {
-    //     Ok(len) = stream.read(&mut buf) => {
-    //         let response = str::from_utf8(&buf[..len]).unwrap();
-    //         if response != "pong" {
-    //             return;
-    //         }else{
-    //             info!("ping response from {} {} is {}", peer_addr, interface, response);
-    //         }
-    //     }
-    //     _ = tokio::time::sleep(tokio::time::Duration::from_millis(1000)) => {
-    //         error!("ping response is not received from {} {}", peer_addr, interface);
-    //         return;
-    //     }
+    // let len = stream.read(&mut buf).await.unwrap();
+    // let response = str::from_utf8(&buf[..len]).unwrap();
+    // if response != "pong" {
+    //     return;
+    // }else{
+    //     info!("ping response from {} {} is {}", peer_addr, interface, response);
     // }
+    // 
+    loop{
+        tokio::select! {
+            Ok(len) = stream.read(&mut buf) => {
+                let response = str::from_utf8(&buf[..len]).unwrap();
+                if response != "pong" {
+                    info!("ping response from {} {} is {}", peer_addr, interface, response);
+                    continue;
+                }else{
+                    info!("ping response from {} {} is {}", peer_addr, interface, response);
+                    break;
+                }
+            }
+            _ = tokio::time::sleep(tokio::time::Duration::from_millis(1000)) => {
+                error!("ping response is not received from {} {}", peer_addr, interface);
+                return;
+            }
+        }
+    }
 
     // inform RIB a connectivity option
     let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();

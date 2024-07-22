@@ -169,3 +169,7 @@ cython_debug/
 
 
 redis-data/
+
+log/
+install/
+build/

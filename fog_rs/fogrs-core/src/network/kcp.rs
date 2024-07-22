@@ -99,7 +99,7 @@ pub async fn reader_and_writer(
                 }
                 // let receiving_buf_size = receiving_buf.len();
                 let mut receiving_buf = receiving_buf[..receiving_buf_size].to_vec();
-                info!("read {} bytes", receiving_buf_size);
+                info!("read {} bytes from {:?}", receiving_buf_size, description);
 
                 // if it's ping, just return the pong
                 if receiving_buf_size == 4 && receiving_buf == vec![0x70, 0x69, 0x6e, 0x67]{
