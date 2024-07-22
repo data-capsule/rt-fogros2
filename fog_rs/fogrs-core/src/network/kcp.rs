@@ -71,6 +71,7 @@ pub async fn reader_and_writer(
     mut stream: KcpStream,
     ros_tx: UnboundedSender<GDPPacket>,       // send to ros
     mut rtc_rx: UnboundedReceiver<GDPPacket>, // receive from ros
+    description: Option<String>,
 ) {
     let mut need_more_data_for_previous_header = false;
     let mut remaining_gdp_header: GDPHeaderInTransit = GDPHeaderInTransit {
@@ -102,7 +103,7 @@ pub async fn reader_and_writer(
 
                 // if it's ping, just return the pong
                 if receiving_buf_size == 4 && receiving_buf == vec![0x70, 0x69, 0x6e, 0x67]{
-                    info!("received a ping packet");
+                    info!("received a ping packet from {:?}", description);
                     let pong = vec![0x70, 0x6f, 0x6e, 0x67];
                     stream.write_all(&pong[..pong.len()]).await.unwrap();
                     stream.flush().await.unwrap();
