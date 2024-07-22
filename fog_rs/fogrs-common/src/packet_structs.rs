@@ -288,15 +288,15 @@ pub fn string_to_gdp_name(name: &str) -> GDPName {
 
 /// construct gdp struct from bytes
 /// bytes is put as payload
-pub fn construct_gdp_forward_from_bytes(
-    destination: GDPName, source: GDPName, buffer: Vec<u8>,
+pub fn construct_gdp_forward_from_bytes_with_guid(
+    destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
 ) -> GDPPacket {
     GDPPacket {
         action: GdpAction::Forward,
         gdpname: destination,
         payload: Some(buffer),
         source: source,
-        guid: None,
+        guid: Some(guid),
         name_record: None,
     }
 }

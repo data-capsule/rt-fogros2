@@ -45,6 +45,10 @@ pub async fn service_connection_fib_handler(
 
                 match pkt.action {
                     GdpAction::Forward => {
+                        if processed_requests.contains(&pkt.guid) {
+                            warn!("the message {:?} is processed, thrown away", pkt.guid);
+                            continue;
+                        }
                         let topic_state = rib_state_table.get(&pkt.gdpname);
                         info!("the current topic state is {:?}", topic_state);
                         match topic_state {
@@ -52,6 +56,7 @@ pub async fn service_connection_fib_handler(
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::RECEIVER {
                                         info!("forwarding to {:?}", dst.description);
+                                        processed_requests.insert(pkt.guid);
                                         match dst.tx.send(pkt.clone()) {
                                             Ok(_) => {
                                                 // logger.log(format!("FORWARD, {:?}, {:?}", pkt.guid, pkt.source));
