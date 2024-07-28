@@ -14,10 +14,10 @@ identifiers:
 topics:
   - topic_name: /benchmark
     topic_type: sensor_msgs/msg/CompressedImage
-    qos: normal 
+    qos: fast 
   - topic_name: /benchmark_echo
     topic_type: std_msgs/msg/String
-    qos: normal 
+    qos: fast
 
 # declare possible states 
 # pub: publish to the swarm
