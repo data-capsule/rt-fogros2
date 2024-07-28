@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use console_subscriber;
 use env_logger;
 use fogrs_signaling::Server;
 

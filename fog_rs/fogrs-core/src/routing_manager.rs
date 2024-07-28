@@ -1,8 +1,5 @@
-use crate::db::{add_entity_to_database_as_transaction, allow_keyspace_notification};
-use crate::db::{get_entity_from_database, get_redis_address_and_port, get_redis_url};
 use crate::network::udp::get_socket_stun;
 use core::panic;
-use default_net::interface::get_default_interface_name;
 use fogrs_common::fib_structs::CandidateStruct;
 use fogrs_common::fib_structs::RoutingManagerRequest;
 use fogrs_common::fib_structs::{FibChangeAction, FibConnectionType, FibStateChange};
@@ -11,15 +8,7 @@ use fogrs_common::packet_structs::{
 };
 use fogrs_kcp::KcpListener;
 use fogrs_kcp::{to_kcp_config, KcpStream};
-use fogrs_ros::TopicManagerRequest;
 use fogrs_signaling::Message;
-use futures::{stream, StreamExt};
-use librice::candidate;
-use openssl::sign;
-use redis_async::client;
-use redis_async::resp::FromResp;
-use serde::{Deserialize, Serialize};
-use std::fmt::format;
 use std::net::SocketAddr;
 use std::str;
 use std::time::Duration;
@@ -33,7 +22,6 @@ use tokio::sync::mpsc::{self};
 
 use libc::{c_int, c_void, setsockopt, SOL_SOCKET, SO_BINDTODEVICE};
 use pnet::datalink::{self};
-use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::ffi::CString;
 use std::os::unix::io::AsRawFd;
 
@@ -233,18 +221,22 @@ fn bind_to_interface(socket: &UdpSocket, interface: &str) -> std::io::Result<()>
 // 	if PONG -> inform RIB a connectivity option
 
 async fn handle_stream_sender(
-    mut stream: KcpStream, fib_tx: UnboundedSender<GDPPacket>, channel_tx: UnboundedSender<FibStateChange>,
-    topic_gdp_name: GDPName, interface: String,peer_addr: SocketAddr, direction: String,
-){
-    // send PING 
+    mut stream: KcpStream, fib_tx: UnboundedSender<GDPPacket>,
+    channel_tx: UnboundedSender<FibStateChange>, topic_gdp_name: GDPName, interface: String,
+    peer_addr: SocketAddr, direction: String,
+) {
+    // send PING
     // await PONG
-    info!("connected to {:?} with interface {}, sending ping", peer_addr, interface);
+    info!(
+        "connected to {:?} with interface {}, sending ping",
+        peer_addr, interface
+    );
     let buffer = b"ping";
     match stream.write_all(&buffer[..4]).await {
         Ok(_) => (),
         Err(err) => {
             error!("write failed, error: {}", err);
-            return; 
+            return;
         }
     };
 
@@ -258,8 +250,8 @@ async fn handle_stream_sender(
     // }else{
     //     info!("ping response from {} {} is {}", peer_addr, interface, response);
     // }
-    // 
-    loop{
+    //
+    loop {
         tokio::select! {
             Ok(len) = stream.read(&mut buf) => {
                 let response = str::from_utf8(&buf[..len]).unwrap();
@@ -299,7 +291,7 @@ async fn handle_stream_sender(
         .send(channel_update_msg)
         .expect("Cannot send channel update message");
     // handle reader and writer
-    crate::network::kcp::reader_and_writer(stream, fib_tx, local_to_net_rx, 
+    crate::network::kcp::reader_and_writer(stream, fib_tx, local_to_net_rx,
         Some(format!(
             "udp stream connecting to remote sender for topic_name {:?} candidate address {:?} direction {:?} from interface {}",
             topic_gdp_name, peer_addr, direction,interface)
@@ -311,7 +303,9 @@ pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
-    let mut signaling_stream = TcpStream::connect("20.172.64.185:8080").await.expect("Cannot connect to signaling server. Is it started?");
+    let mut signaling_stream = TcpStream::connect("20.172.64.185:8080")
+        .await
+        .expect("Cannot connect to signaling server. Is it started?");
 
     let thread_gdp_name = generate_random_gdp_name();
     let candidate_interfaces = gather_candidate_interfaces();
@@ -350,7 +344,7 @@ pub async fn register_stream_sender(
         info!("KCP listener is bound to {:?}", sock_public_addr);
         tokio::spawn(async move {
             loop {
-                let (mut stream, peer_addr) = match listener.accept().await {
+                let (stream, peer_addr) = match listener.accept().await {
                     Ok(s) => s,
                     Err(err) => {
                         error!("accept failed, error: {}", err);
@@ -368,8 +362,15 @@ pub async fn register_stream_sender(
                 let interface_name_clone = interface_name.clone();
                 tokio::spawn(async move {
                     handle_stream_sender(
-                        stream, fib_tx_clone, channel_tx_clone, topic_gdp_name, interface_name_clone, peer_addr, direction_clone,
-                    ).await;
+                        stream,
+                        fib_tx_clone,
+                        channel_tx_clone,
+                        topic_gdp_name,
+                        interface_name_clone,
+                        peer_addr,
+                        direction_clone,
+                    )
+                    .await;
                 });
             }
         });
@@ -398,7 +399,7 @@ pub async fn register_stream_sender(
         topic: format!("{}-{:}", topic_gdp_name, &direction),
         data: Some(candidate_struct),
     };
-    let mut request = serde_json::to_string(&request).unwrap();
+    let request = serde_json::to_string(&request).unwrap();
     // request.push('\n');
     publish_stream.write_all(request.as_bytes()).await;
     info!("sent to signaling server {:?}", request);
@@ -442,15 +443,22 @@ pub async fn register_stream_sender(
                     // let stream = fogrs_kcp::KcpStream::connect(&config, candidate_addr)
                     //     .await
                     //     .unwrap();
-                    let stream = fogrs_kcp::KcpStream::connect_with_socket(&config, socket, candidate_addr)
-                        .await
-                        .unwrap();
+                    let stream =
+                        fogrs_kcp::KcpStream::connect_with_socket(&config, socket, candidate_addr)
+                            .await
+                            .unwrap();
                     info!("connected to {:?}", candidate_addr);
                     handle_stream_sender(
-                        stream, fib_tx_clone, channel_tx_clone, topic_gdp_name, interface_name, candidate_addr, direction_clone,
-                    ).await;
+                        stream,
+                        fib_tx_clone,
+                        channel_tx_clone,
+                        topic_gdp_name,
+                        interface_name,
+                        candidate_addr,
+                        direction_clone,
+                    )
+                    .await;
                 });
-                
             }
         }
     }
@@ -463,17 +471,19 @@ pub async fn register_stream_sender(
 // append (GDPNAME, [candidates]) to {<topic_name>-receiver}
 // subscribe to {<topic_name>-sender}
 
-// on_new_sender(): 
-// 	connect to candidates in sender 
+// on_new_sender():
+// 	connect to candidates in sender
 // 	await PING, respond PONG
 // on_new_socket_connection_from_senders():
 // 	await PING
-	
+
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
-    let mut signaling_stream = TcpStream::connect("20.172.64.185:8080").await.expect("Cannot connect to signaling server. Is it started?");
+    let mut signaling_stream = TcpStream::connect("20.172.64.185:8080")
+        .await
+        .expect("Cannot connect to signaling server. Is it started?");
 
     let thread_gdp_name = generate_random_gdp_name();
     let candidate_interfaces = gather_candidate_interfaces();
@@ -512,7 +522,7 @@ pub async fn register_stream_receiver(
         info!("KCP listener is bound to {:?}", sock_public_addr);
         tokio::spawn(async move {
             loop {
-                let (mut stream, peer_addr) = match listener.accept().await {
+                let (stream, peer_addr) = match listener.accept().await {
                     Ok(s) => s,
                     Err(err) => {
                         error!("accept failed, error: {}", err);
@@ -582,7 +592,7 @@ pub async fn register_stream_receiver(
         topic: format!("{}-{:}", topic_gdp_name, &direction),
         data: Some(candidate_struct),
     };
-    let mut request = serde_json::to_string(&request).unwrap();
+    let request = serde_json::to_string(&request).unwrap();
     // request.push('\n');
     publish_stream.write_all(request.as_bytes()).await;
     info!("sent to signaling server {:?}", request);
@@ -611,16 +621,16 @@ pub async fn register_stream_receiver(
         info!("receiver_struct {:?}", receiver_struct);
         for candidate_addr in receiver_struct.candidates {
             for interface_name in candidate_interfaces.clone() {
-            let direction = direction.clone();
+                let direction = direction.clone();
 
-            let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-            bind_to_interface(&socket, interface_name.as_str()).unwrap();
+                let socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
+                bind_to_interface(&socket, interface_name.as_str()).unwrap();
 
-            // let _ = fogrs_kcp::KcpStream::connect(&config, candidate_addr)
-            //     .await
-            //     .unwrap();
+                // let _ = fogrs_kcp::KcpStream::connect(&config, candidate_addr)
+                //     .await
+                //     .unwrap();
 
-            let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                 let fib_clone = fib_tx.clone();
                 let description = format!(
                     "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} from {:?} direction {:?}",
@@ -644,12 +654,13 @@ pub async fn register_stream_receiver(
 
                 tokio::spawn(async move {
                     let description_clone = description.clone();
-                    let mut stream = fogrs_kcp::KcpStream::connect_with_socket(&config, socket, candidate_addr)
-                        .await
-                        .unwrap();
+                    let mut stream =
+                        fogrs_kcp::KcpStream::connect_with_socket(&config, socket, candidate_addr)
+                            .await
+                            .unwrap();
                     info!("connected to {:?}", candidate_addr);
 
-                    // send ping 
+                    // send ping
                     stream.write_all(b"ping").await.unwrap();
                     stream.flush().await.unwrap();
 

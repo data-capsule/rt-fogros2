@@ -5,8 +5,8 @@ use fogrs_common::packet_structs::{
 use fogrs_common::{
     fib_structs::{FibChangeAction, FibConnectionType, FibStateChange},
     packet_structs::{
-        construct_gdp_forward_from_bytes_with_guid, generate_random_gdp_name, get_gdp_name_from_topic,
-        GDPName, GDPPacket, GdpAction,
+        construct_gdp_forward_from_bytes_with_guid, generate_random_gdp_name,
+        get_gdp_name_from_topic, GDPName, GDPPacket, GdpAction,
     },
 };
 use futures::StreamExt;
@@ -141,7 +141,7 @@ impl ROSManager {
                                 let guid = generate_random_gdp_name();
                                 let packet = construct_gdp_forward_from_bytes_with_guid(topic_gdp_name, self.unique_ros_node_gdp_name, ros_msg, guid);
                                 fib_tx.send(packet).expect("send for ros subscriber failure");
-                            }   
+                            }
                         });
                         join_handles.push(ros_handle);
                     }
