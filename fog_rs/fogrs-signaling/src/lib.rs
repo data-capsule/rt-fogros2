@@ -19,28 +19,53 @@ pub struct Message {
 #[derive(Clone)]
 pub struct Topic {
     pub name: String,
-    pub log: Arc<Mutex<VecDeque<(CandidateStruct, tokio::time::Instant)>>>,
+    pub log: Arc<Mutex<VecDeque<(CandidateStruct, Instant)>>>,
     pub sender: broadcast::Sender<CandidateStruct>,
 }
 
 impl Topic {
     fn new(name: &str) -> Self {
         let (sender, _) = broadcast::channel(100);
-
         let topic = Topic {
             name: name.to_string(),
             log: Arc::new(Mutex::new(VecDeque::new())),
             sender,
         };
-        Topic::start_log_cleanup_task(topic.log.clone());
+        topic.start_cleanup_task();
         topic
+    }
+
+    fn start_cleanup_task(&self) {
+        let log = Arc::clone(&self.log);
+        let name = self.name.clone();
+        let sender = self.sender.clone();
+
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_secs(10));
+            loop {
+                interval.tick().await;
+
+                let expiration_duration = Duration::from_secs(60);
+                let now = Instant::now();
+                let mut log_guard = log.lock().await;
+
+                // Remove expired entries
+                log_guard.retain(|&(_, timestamp)| now.duration_since(timestamp) < expiration_duration);
+
+                // Check if topic is empty and delete it if necessary
+                if log_guard.is_empty() && sender.receiver_count() == 0 {
+                    info!("Deleting empty topic: {}", name);
+                    drop(log_guard);
+                    break;
+                }
+            }
+        });
     }
 
     async fn publish(&self, message: CandidateStruct) {
         info!("Publishing message to topic {}: {:?}", self.name, message);
-        info!("current log: {:?}", self.log.lock().await);
         let mut log = self.log.lock().await;
-        log.push_back((message.clone(), tokio::time::Instant::now()));
+        log.push_back((message.clone(), Instant::now()));
         if self.sender.receiver_count() > 0 {
             if let Err(e) = self.sender.send(message) {
                 error!("Error broadcasting message: {}", e);
@@ -79,30 +104,6 @@ impl Topic {
                 }
             }
         }
-    }
-
-    fn start_log_cleanup_task(log: Arc<Mutex<VecDeque<(CandidateStruct, Instant)>>>) {
-        tokio::spawn(async move {
-            let cleanup_interval = Duration::from_secs(60);
-            let log_retention_duration = Duration::from_secs(60);
-
-            let mut interval = time::interval(cleanup_interval);
-
-            loop {
-                interval.tick().await;
-
-                let mut log = log.lock().await;
-                let now = Instant::now();
-
-                while let Some((_, timestamp)) = log.front() {
-                    if *timestamp + log_retention_duration > now {
-                        break;
-                    }
-                    log.pop_front();
-                }
-                info!("Cleaned up log: {:?}", log);
-            }
-        });
     }
 }
 
