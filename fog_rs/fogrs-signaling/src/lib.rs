@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
+use tokio::time::{self, Duration, Instant};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Message {
@@ -25,11 +26,14 @@ pub struct Topic {
 impl Topic {
     fn new(name: &str) -> Self {
         let (sender, _) = broadcast::channel(100);
-        Topic {
+
+        let topic = Topic {
             name: name.to_string(),
             log: Arc::new(Mutex::new(VecDeque::new())),
             sender,
-        }
+        };
+        Topic::start_log_cleanup_task(topic.log.clone());
+        topic
     }
 
     async fn publish(&self, message: CandidateStruct) {
@@ -75,6 +79,30 @@ impl Topic {
                 }
             }
         }
+    }
+
+    fn start_log_cleanup_task(log: Arc<Mutex<VecDeque<(CandidateStruct, Instant)>>>) {
+        tokio::spawn(async move {
+            let cleanup_interval = Duration::from_secs(60);
+            let log_retention_duration = Duration::from_secs(60);
+
+            let mut interval = time::interval(cleanup_interval);
+
+            loop {
+                interval.tick().await;
+
+                let mut log = log.lock().await;
+                let now = Instant::now();
+
+                while let Some((_, timestamp)) = log.front() {
+                    if *timestamp + log_retention_duration > now {
+                        break;
+                    }
+                    log.pop_front();
+                }
+                info!("Cleaned up log: {:?}", log);
+            }
+        });
     }
 }
 
@@ -152,35 +180,3 @@ impl Server {
         }
     }
 }
-// pub async fn publish(topic: &str, message: &str) -> io::Result<()> {
-//     let mut stream = TcpStream::connect("127.0.0.1:8080").await?;
-//     let request = Message {
-//         command: "PUBLISH".to_string(),
-//         topic: topic.to_string(),
-//         data: Some(message.to_string()),
-//     };
-//     let request = serde_json::to_string(&request).unwrap();
-//     stream.write_all(request.as_bytes()).await?;
-//     Ok(())
-// }
-
-// pub async fn subscribe(topic: &str) -> io::Result<()> {
-//     let mut stream = TcpStream::connect("127.0.0.1:8080").await?;
-//     let request = Message {
-//         command: "SUBSCRIBE".to_string(),
-//         topic: topic.to_string(),
-//         data: None,
-//     };
-//     let request = serde_json::to_string(&request).unwrap();
-//     stream.write_all(request.as_bytes()).await?;
-
-//     let mut buffer = [0; 1024];
-//     loop {
-//         let n = stream.read(&mut buffer).await?;
-//         if n == 0 {
-//             break;
-//         }
-//         println!("{}", String::from_utf8_lossy(&buffer[..n]));
-//     }
-//     Ok(())
-// }

@@ -80,8 +80,8 @@ enum Commands {
         subcommand: CompletionSubcommand,
     },
     #[clap(
-        name = "config",
-        about = "Show Configuration",
+        name = "signal",
+        about = "Run Signaling Server",
         long_about = None,
     )]
     Config,

@@ -1,6 +1,9 @@
 identifiers: 
   task: test_cert 
 
+addresses:
+  signaling_server_address: '3.18.194.127:8000'
+
 services:
   - service_name: /yolo
     service_type: shared_srvs/srv/Yolo
@@ -14,7 +17,6 @@ state_machine:
     services:
       - /yolo: service 
       
-# EXAMPLE #1: 2 servers and 1 client
 assignment:
   machine_client: client
   machine_server: server
@@ -23,16 +25,3 @@ topology:
   machine_client:
     children: 
       - machine_server
-
-# EXAMPLE #2: server -> switch -> client 
-# assignment: 
-#   machine_client: client
-#   machine_server: server
-#   machine_switch: standby
-
-# topology:
-#   machine_client:
-#     children: 
-#       - machine_switch:
-#           children: 
-#             - machine_server
