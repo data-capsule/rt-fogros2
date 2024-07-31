@@ -37,6 +37,6 @@ topology:
     children: 
       - machine_listener
 
-bindings:
-  enp5s0: 54.177.240.220
-  # wlo1: "54.176.160.12"
+# bindings:
+#   enp5s0: 128.32.37.36
+#   wlo1: "54.176.160.12"

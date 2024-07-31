@@ -290,6 +290,7 @@ async fn handle_stream_sender(
         forward_destination: Some(local_to_net_tx),
         description: Some(description),
         interface: Some(interface),
+        address: Some(peer_addr.to_string()),
     };
     channel_tx
         .send(channel_update_msg)
@@ -553,6 +554,7 @@ pub async fn register_stream_receiver(
                         // connection_type: direction_str_to_connection_type(direction_clone.as_str()).to_owned(),  // direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
                         forward_destination: Some(local_to_net_tx),
                         interface: Some(interface_name_clone.clone()),
+                        address: Some(peer_addr.to_string()),
                         description: Some(format!(
                             "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} from {:?} direction {:?}",
                             topic_gdp_name, sock_public_addr, peer_addr, direction_clone,
@@ -653,6 +655,7 @@ pub async fn register_stream_receiver(
                     ),
                     interface: Some(interface_name.clone()),
                     forward_destination: Some(local_to_net_tx),
+                    address: Some(candidate_addr.to_string()),
                     description: Some(description.clone()),
                 };
                 let _ = channel_tx.send(channel_update_msg);

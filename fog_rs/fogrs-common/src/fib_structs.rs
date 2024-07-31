@@ -110,6 +110,7 @@ pub struct FibStateChange {
     pub topic_gdp_name: GDPName,
     pub forward_destination: Option<UnboundedSender<GDPPacket>>,
     pub interface: Option<String>,
+    pub address: Option<String>,
     pub description: Option<String>,
 }
 

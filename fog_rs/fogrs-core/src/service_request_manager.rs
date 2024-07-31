@@ -29,7 +29,11 @@ fn read_binding_table() -> Result<HashMap<String, String>, Box<dyn std::error::E
         binding_table.insert(key_str.to_string(), value_str.to_string());
     }
 
-    Ok(binding_table)
+    if binding_table.is_empty() {
+        return Err("binding table is empty".into());
+    }else {
+        return Ok(binding_table);
+    }
 }
 
 
@@ -47,10 +51,10 @@ pub async fn service_connection_fib_handler(
 ) {
 
     let binding_table = match read_binding_table() {
-        Ok(table) => table,
+        Ok(table) => Some(table),
         Err(e) => {
-            error!("Failed to read binding table: {:?}", e);
-            HashMap::new()
+            warn!("Unable to read binding table: {:?}", e);
+            None
         }
     };
 
@@ -218,6 +222,24 @@ pub async fn service_connection_fib_handler(
                     FibChangeAction::ADD => {
                         info!("update status received {:?}", update);
                         if update.connection_type == FibConnectionType::RECEIVER || update.connection_type == FibConnectionType::REQUESTRECEIVER || update.connection_type == FibConnectionType::RESPONSERECEIVER {
+                            
+                            let mut in_binding_table = false;
+                            let update_interface = update.interface.clone().unwrap();
+                            let update_address = update.address.clone().unwrap(); // this is IP only address
+                            // check the binding table; if the table has matching entry, then set should_filter to true
+                            if let Some(table) = &binding_table {
+                                if let Some(address) = table.get(&update_interface) {
+                                    if update_address.starts_with(address) {
+                                        info!("interface {:?} is added to FIB", update);
+                                        in_binding_table = true;
+                                    }
+                                }
+                            }
+                            if binding_table.is_some() && update_interface != "ros".to_string() && !in_binding_table {
+                                warn!("interface {} is not added to FIB, because it is not in the binding table {:?}", update_interface, binding_table);
+                                continue;
+                            }
+                            
                             match  rib_state_table.get_mut(&update.topic_gdp_name) {
                                 Some(v) => {
                                         info!("local topic interface {:?} is added", update);

@@ -122,8 +122,9 @@ impl ROSManager {
                             connection_type: FibConnectionType::SENDER, // sender because to send to webrtc
                             topic_gdp_name: topic_gdp_name,
                             forward_destination: Some(ros_tx),
-                            interface: Some("ros topic_remote_publisher".to_string()),
+                            interface: Some("ros".to_string()),
                             description: Some("ros topic send".to_string()),
+                            address: Some(topic_name.clone()),
                         };
                         let _ = channel_tx.send(channel_update_msg);
 
@@ -216,8 +217,9 @@ impl ROSManager {
                         connection_type: FibConnectionType::RECEIVER, // receiver because to receive from webrtc
                         topic_gdp_name: topic_gdp_name,
                         forward_destination: Some(ros_tx),
-                        interface: Some("ros topic_remote_publisher".to_string()),
+                        interface: Some("ros".to_string()),
                         description: Some("ros topic receive".to_string()),
+                        address: Some(topic_name.clone()),
                     };
                     let _ = channel_tx.send(channel_update_msg);
 
@@ -324,8 +326,9 @@ impl ROSManager {
                     connection_type: FibConnectionType::REQUESTRECEIVER,
                     topic_gdp_name: topic_gdp_name,
                     forward_destination: Some(ros_tx),
-                    interface: Some("ros local service caller".to_string()),
+                    interface: Some("ros".to_string()),
                     description: Some("ros service request".to_string()),
+                    address: Some(topic_name.clone()),
                 };
                 let _ = channel_tx.send(channel_update_msg);
 
@@ -441,8 +444,9 @@ impl ROSManager {
                         connection_type: FibConnectionType::RESPONSERECEIVER,
                         topic_gdp_name: topic_gdp_name,
                         forward_destination: Some(ros_tx),
-                        interface: Some("ros remote service caller".to_string()),
+                        interface: Some("ros".to_string()),
                         description: Some("ros service response".to_string()),
+                        address: Some(topic_name.clone()),
                     };
                     let _ = channel_tx.send(channel_update_msg);
 
