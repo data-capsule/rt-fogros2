@@ -473,7 +473,7 @@ impl ROSManager {
                                             req.respond(respond_msg).expect("could not send service response");
                                         },
                                         // timeout after 1 second
-                                        _ = tokio::time::sleep(Duration::from_millis(1000)) => {
+                                        _ = tokio::time::sleep(Duration::from_millis(50000)) => {
                                             error!("timeout for ros_rx");
                                             let respond_msg = (r2r::UntypedServiceSupport::new_from(&topic_type).unwrap().make_response_msg)();
                                             req.respond(respond_msg).expect("could not send service response");

@@ -48,7 +48,7 @@ The default certificate is named `test_cert`.
 #### Step 1: Build Container
 Build container with the following command:
 ```bash
-docker build --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) --build-arg USER_NAME="$USER"  -t dev-fr .
+docker build --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) --build-arg USER_NAME="$USER"  -t dev-fr - < Dockerfile-dev
 ```
 then start **two** terminals, for both, run 
 ```bash

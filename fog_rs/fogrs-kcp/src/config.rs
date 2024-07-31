@@ -120,7 +120,7 @@ pub fn to_kcp_config(config: &str) -> KcpConfig {
             flush_acks_input: true,
             stream: false,
         },
-        "normal" => KcpConfig {
+        "slow" => KcpConfig {
             mtu: 1400,
             nodelay: KcpNoDelayConfig::normal(),
             wnd_size: (256, 256),
@@ -131,11 +131,11 @@ pub fn to_kcp_config(config: &str) -> KcpConfig {
         },
         _ => KcpConfig {
             mtu: 1400,
-            nodelay: KcpNoDelayConfig::default(),
+            nodelay: KcpNoDelayConfig::fastest(),
             wnd_size: (256, 256),
             session_expire: Duration::from_secs(90),
-            flush_write: false,
-            flush_acks_input: false,
+            flush_write: true,
+            flush_acks_input: true,
             stream: false,
         },
     }

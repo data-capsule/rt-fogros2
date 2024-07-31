@@ -1,5 +1,5 @@
 use crate::logger::{handle_logs, Logger};
-use chrono;
+use chrono::{self, format};
 use fogrs_common::fib_structs::{
     FIBState, FibChangeAction, FibConnection, FibConnectionType, FibStateChange, TopicStateInFIB,
 };
@@ -28,6 +28,8 @@ pub async fn service_connection_fib_handler(
     let mut processed_requests = HashSet::new();
 
     let mut request_latency_table: HashMap<GDPName, SystemTime> = HashMap::new();
+
+    let mut sent_requests_by_interface: HashMap<GDPName, Vec<String>> = HashMap::new();
 
     let (tx, rx) = mpsc::unbounded_channel();
     let logger = Logger::new(tx);
@@ -83,6 +85,9 @@ pub async fn service_connection_fib_handler(
                         if processed_requests.contains(&pkt.guid) {
                             warn!("the request is processed, thrown away");
                             continue;
+                        }else{
+                            // this is the first time receivng the request
+                            request_latency_table.insert(pkt.gdpname, SystemTime::now());
                         }
                         let topic_state = rib_state_table.get(&pkt.gdpname);
                         info!("the current topic state is {:?}", topic_state);
@@ -90,9 +95,43 @@ pub async fn service_connection_fib_handler(
                             Some(s) => {
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUESTRECEIVER {
-                                        request_latency_table.insert(pkt.gdpname, SystemTime::now());
+                                        
                                         let _ = dst.tx.send(pkt.clone());
+                                        println!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source);
                                         logger.log(format!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
+
+                                        // let description = dst.description.clone().unwrap();
+                                        // let description_parts: Vec<&str> = description.split(" ").collect();
+                                        // let interface = description_parts[description_parts.len() - 1];
+                                        // let ip_address = description_parts[description_parts.len() - 6].split(":").collect::<Vec<&str>>()[0];
+
+                                        // // if (interface == "enp5s0" && ip_address == "54.177.240.220") || (interface == "wlo1" && ip_address == "54.176.160.12") { //two interfaces, two servers
+                                        // if (interface == "wlo1" && ip_address == "54.177.240.220") || (interface == "wlo1" && ip_address == "54.176.160.12") { //one interface, two servers 
+                                        // // if (interface == "enp5s0" && ip_address == "54.177.240.220") || (interface == "wlo1" && ip_address == "54.177.240.220") { //two interfaces, one server
+                                        // // if (interface == "enp5s0" && ip_address == "54.177.240.220") { //one interface, one server
+                                        // // if (interface == "wlo1" && ip_address == "54.176.160.12") { //one interface, one server
+                                        //     // check if the request has been sent to this interface 
+                                        //     if sent_requests_by_interface.contains_key(&pkt.guid.unwrap()) {
+                                        //         let requests = sent_requests_by_interface.get_mut(&pkt.guid.unwrap()).unwrap();
+                                        //         // if requests.contains(&interface.to_string()) {
+                                        //         //     warn!("the request is already sent to this interface, thrown away");
+                                        //         //     continue;
+                                        //         // }else{
+                                        //             requests.push(interface.to_string());
+                                        //             let _ = dst.tx.send(pkt.clone());
+                                        //             println!("REQUEST, {:?}, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, interface, ip_address);
+                                        //             logger.log(format!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
+                                        //         // }
+                                        //     }else{
+                                        //         sent_requests_by_interface.insert(pkt.guid.unwrap(), vec!(interface.to_string()));
+                                        //         let _ = dst.tx.send(pkt.clone());
+                                        //         println!("REQUEST, {:?}, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, interface, ip_address);
+                                        //         logger.log(format!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
+                                        //     }
+                                        // }else{
+                                        //     println!("not sent interface: {:?}, ip_address: {:?}", interface, ip_address);
+                                        // }
+
                                     } else {
                                         warn!("the current topic {:?} with {:?}, not forwarded", dst.connection_type, dst.description);
                                     }
@@ -107,11 +146,13 @@ pub async fn service_connection_fib_handler(
                         info!("received GDP response {:?}", pkt);
                         warn!("response: {:?} from {:?}", pkt.guid, pkt.source);
                         let processing_time = SystemTime::now().duration_since(request_latency_table.get(&pkt.gdpname).unwrap().clone()).unwrap();
-                        logger.log(format!("RESPONSE, {:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
+                        
                         if processed_requests.contains(&pkt.guid) {
+                            logger.log(format!("RESPONSE-DUP, {:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
                             warn!("the request is processed, thrown away");
                             continue;
                         }else{
+                            logger.log(format!("RESPONSE, {:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
                             processed_requests.insert(pkt.guid);
                             let topic_state = rib_state_table.get(&pkt.gdpname);
                             info!("the current topic state is {:?}", topic_state);
