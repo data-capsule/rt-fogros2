@@ -23,7 +23,6 @@ pub mod service_manager;
 // pub mod ebpf_routing_manager;
 pub mod util;
 use fogrs_utils::error::Result;
-
 pub fn start() -> Result<()> {
     // does nothing
 

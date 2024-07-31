@@ -167,6 +167,8 @@ class SGC_Router_Node(rclpy.node.Node):
                 config_path, whoami, logger, self.sgc_router_api_addr
             )
 
+        current_env["SGC_CONFIG_PATH"] = f"{config_path}"
+
         # build and run SGC
         logger.info("building FogROS SGC... It takes longer for first time")
         # remove the stale SGC router if the domain id is the same
@@ -183,6 +185,7 @@ class SGC_Router_Node(rclpy.node.Node):
             )
             pid = grep_result.split()[1]
             subprocess.call(f"kill {pid}", env=current_env, shell=True)
+
         # check if the port exists
         current_env["SGC_API_PORT"] = str(self.sgc_router_api_port)
         if self.swarm:
@@ -196,8 +199,7 @@ class SGC_Router_Node(rclpy.node.Node):
                 f"using signaling server address {self.swarm.signaling_server_address}, routing information base address {self.swarm.routing_information_base_address}"
             )
         else:
-            current_env["SGC_SIGNAL_SERVER_ADDRESS"] = "ws://3.18.194.127:8000"
-            current_env["SGC_RIB_SERVER_ADDRESS"] = "3.18.194.127:8002"
+            current_env["SGC_SIGNAL_SERVER_ADDRESS"] = "20.172.64.185:8000"
             self.logger.info(
                 f"using default signaling server address {current_env['SGC_SIGNAL_SERVER_ADDRESS']}, routing information base address {current_env['SGC_RIB_SERVER_ADDRESS']}"
             )

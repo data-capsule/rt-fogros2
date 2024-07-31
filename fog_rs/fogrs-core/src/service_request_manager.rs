@@ -11,6 +11,28 @@ use std::time::SystemTime;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
+fn read_binding_table() -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+    // get configuration file path from environment variable
+    let config_file_path = std::env::var("SGC_CONFIG_PATH")?;
+    let mut binding_table = HashMap::new();
+    
+    // read yaml 
+    let config_file = std::fs::File::open(config_file_path)?;
+    let config_file_reader = std::io::BufReader::new(config_file);
+    let config: serde_yaml::Value = serde_yaml::from_reader(config_file_reader)?;
+    let binding_table_yaml = config["bindings"].as_mapping() // get the binding table
+        .ok_or("binding table not found")?;
+
+    for (key, value) in binding_table_yaml {
+        let key_str = key.as_str().ok_or("key is not a string")?;
+        let value_str = value.as_str().ok_or("value is not a string")?;
+        binding_table.insert(key_str.to_string(), value_str.to_string());
+    }
+
+    Ok(binding_table)
+}
+
+
 /// receive, check, and route GDP messages
 ///
 /// receive from a pool of receiver connections (one per interface)
@@ -23,6 +45,15 @@ pub async fn service_connection_fib_handler(
     // mut response_rx: UnboundedReceiver<GDPPacket>, // its tx used to transmit data to fib
     mut channel_rx: UnboundedReceiver<FibStateChange>, /* its tx used to update fib with new names/records */
 ) {
+
+    let binding_table = match read_binding_table() {
+        Ok(table) => table,
+        Err(e) => {
+            error!("Failed to read binding table: {:?}", e);
+            HashMap::new()
+        }
+    };
+
     let mut rib_state_table: HashMap<GDPName, FIBState> = HashMap::new();
 
     let mut processed_requests = HashSet::new();
@@ -186,32 +217,39 @@ pub async fn service_connection_fib_handler(
                 match update.action {
                     FibChangeAction::ADD => {
                         info!("update status received {:?}", update);
-                        match  rib_state_table.get_mut(&update.topic_gdp_name) {
-                            Some(v) => {
-                                info!("local topic interface {:?} is added", update);
-                                v.receivers.push(FibConnection{
-                                    state: TopicStateInFIB::RUNNING,
-                                    connection_type: update.connection_type,
-                                    tx: update.forward_destination.unwrap(),
-                                    description: update.description,
-                                });
+                        if update.connection_type == FibConnectionType::RECEIVER || update.connection_type == FibConnectionType::REQUESTRECEIVER || update.connection_type == FibConnectionType::RESPONSERECEIVER {
+                            match  rib_state_table.get_mut(&update.topic_gdp_name) {
+                                Some(v) => {
+                                        info!("local topic interface {:?} is added", update);
+                                        // check binding table 
+                                        v.receivers.push(FibConnection{
+                                            state: TopicStateInFIB::RUNNING,
+                                            connection_type: update.connection_type,
+                                            tx: update.forward_destination.unwrap(),
+                                            description: update.description,
+                                        });
+                    
+                                }
+                                None =>{
+                                    info!("Creating a new entry of {:?}", update);
+                                    let state = FIBState {
+                                        receivers: vec!(FibConnection{
+                                            state: TopicStateInFIB::RUNNING,
+                                            connection_type: update.connection_type,
+                                            tx: update.forward_destination.unwrap(),
+                                            description: update.description,
+                                        }),
+                                    };
+                                    rib_state_table.insert(
+                                        update.topic_gdp_name,
+                                        state,
+                                    );
+                                }
                             }
-                            None =>{
-                                info!("Creating a new entry of {:?}", update);
-                                let state = FIBState {
-                                    receivers: vec!(FibConnection{
-                                        state: TopicStateInFIB::RUNNING,
-                                        connection_type: update.connection_type,
-                                        tx: update.forward_destination.unwrap(),
-                                        description: update.description,
-                                    }),
-                                };
-                                rib_state_table.insert(
-                                    update.topic_gdp_name,
-                                    state,
-                                );
-                            }
-                        };
+                        }else{
+                            warn!("sender connection type {:?}, not added to FIB", update.connection_type);
+                            continue;
+                        }
                     },
                     _ => {
                         error!("Unknown action {:?}", update.action);

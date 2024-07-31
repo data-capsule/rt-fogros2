@@ -271,6 +271,11 @@ async fn handle_stream_sender(
         }
     }
 
+    let description = format!(
+        "udp stream connecting to remote sender for topic_name {:?} candidate address {:?} direction {:?} from interface {}",
+        topic_gdp_name, peer_addr, direction, interface
+    );
+    let debug_description = description.clone();
     // inform RIB a connectivity option
     let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
     let channel_update_msg = FibStateChange {
@@ -283,27 +288,23 @@ async fn handle_stream_sender(
         // connection_type: direction_str_to_connection_type(direction.as_str()),  // direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
         connection_type: direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
         forward_destination: Some(local_to_net_tx),
-        description: Some(format!(
-            "udp stream connecting to remote sender for topic_name {:?} candidate address {:?} direction {:?} from interface {}",
-            topic_gdp_name, peer_addr, direction,interface,
-        )),
+        description: Some(description),
+        interface: Some(interface),
     };
     channel_tx
         .send(channel_update_msg)
         .expect("Cannot send channel update message");
     // handle reader and writer
     crate::network::kcp::reader_and_writer(stream, fib_tx, local_to_net_rx,
-        Some(format!(
-            "udp stream connecting to remote sender for topic_name {:?} candidate address {:?} direction {:?} from interface {}",
-            topic_gdp_name, peer_addr, direction,interface)
-        )
+        Some(debug_description)
     ).await;
 }
 
 pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
+    channel_tx: UnboundedSender<FibStateChange>, config: fogrs_kcp::KcpConfig,
 ) {
+    info!("register_stream_sender to {:?}", get_signaling_server_address());
     let mut signaling_stream = TcpStream::connect(get_signaling_server_address().as_str())
         .await
         .expect("Cannot connect to signaling server. Is it started?");
@@ -480,7 +481,7 @@ pub async fn register_stream_sender(
 
 pub async fn register_stream_receiver(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
-    channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
+    channel_tx: UnboundedSender<FibStateChange>, config: fogrs_kcp::KcpConfig,
 ) {
     let mut signaling_stream = TcpStream::connect(get_signaling_server_address().as_str())
         .await
@@ -539,6 +540,7 @@ pub async fn register_stream_receiver(
                 let channel_tx_clone = channel_tx_clone.clone();
                 let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                 let direction_clone = direction_clone.clone();
+                let interface_name_clone = interface_name.clone();
                 tokio::spawn(async move {
                     let channel_update_msg = FibStateChange {
                         action: FibChangeAction::ADD,
@@ -550,6 +552,7 @@ pub async fn register_stream_receiver(
                         connection_type: direction_str_to_connection_type(flip_direction(direction_clone.as_str()).unwrap().as_str()),
                         // connection_type: direction_str_to_connection_type(direction_clone.as_str()).to_owned(),  // direction_str_to_connection_type(flip_direction(direction.as_str()).unwrap().as_str()),
                         forward_destination: Some(local_to_net_tx),
+                        interface: Some(interface_name_clone.clone()),
                         description: Some(format!(
                             "udp stream connecting to remote sender for topic_name {:?} bind to address {:?} from {:?} direction {:?}",
                             topic_gdp_name, sock_public_addr, peer_addr, direction_clone,
@@ -648,6 +651,7 @@ pub async fn register_stream_receiver(
                     connection_type: direction_str_to_connection_type(
                         flip_direction(direction.clone().as_str()).unwrap().as_str(),
                     ),
+                    interface: Some(interface_name.clone()),
                     forward_destination: Some(local_to_net_tx),
                     description: Some(description.clone()),
                 };
@@ -714,7 +718,6 @@ impl RoutingManager {
                     let certificate = request.certificate.clone();
                     let topic_qos = request.topic_qos.clone();
                     let config = to_kcp_config(topic_qos.as_str());
-                    let interface = "wlo1".to_string();//get_default_interface_name().unwrap();
                     let direction = format!("{}-{}", request.connection_type.unwrap(), "sender");
                     let connection_type = direction_str_to_connection_type(
                         direction.as_str()
@@ -732,7 +735,7 @@ impl RoutingManager {
                         connection_type
                     );
 
-                    let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                    // let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                     let channel_tx_clone = channel_tx.clone();
                     tokio::spawn(async move {
 
@@ -741,24 +744,24 @@ impl RoutingManager {
                             direction,
                             fib_tx.clone(),
                             channel_tx_clone,
-                            interface.as_str(),
                             config,
                         )
                         .await;
                     });
 
-                    let channel_update_msg = FibStateChange {
-                        action: FibChangeAction::ADD,
-                        topic_gdp_name: topic_gdp_name,
-                        connection_type: connection_type,
-                        forward_destination: Some(local_to_net_tx),
-                        description: Some(format!(
-                            "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
-                            topic_name, topic_type, connection_type
-                        )),
-                    };
-                    let _ = channel_tx.send(channel_update_msg);
-                    info!("remote sender sent channel update message");
+                    // let channel_update_msg = FibStateChange {
+                    //     action: FibChangeAction::ADD,
+                    //     topic_gdp_name: topic_gdp_name,
+                    //     connection_type: connection_type,
+                    //     forward_destination: Some(local_to_net_tx),
+                    //     interface: None,
+                    //     description: Some(format!(
+                    //         "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
+                    //         topic_name, topic_type, connection_type
+                    //     )),
+                    // };
+                    // let _ = channel_tx.send(channel_update_msg);
+                    // info!("remote sender sent channel update message");
                 }
                 // _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
                 //     info!("waiting for request message");
@@ -795,14 +798,13 @@ impl RoutingManager {
 
                         let config = to_kcp_config(topic_qos.as_str());
                         // let interface = get_default_interface_name().unwrap();
-                        let interface = "wlo1".to_string();//get_default_interface_name().unwrap();
 
                         warn!(
                             "receiver_network_routing_thread_manager {:?}",
                             connection_type
                         );
 
-                        let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
+                        // let (local_to_net_tx, local_to_net_rx) = mpsc::unbounded_channel();
                         let channel_tx_clone = channel_tx.clone();
 
                         register_stream_receiver(
@@ -810,24 +812,24 @@ impl RoutingManager {
                             direction,
                             fib_tx.clone(),
                             channel_tx_clone,
-                            interface.as_str(),
                             config,
                         )
                         .await;
                         warn!("receiver_network_routing_thread_manager {:?} finished", connection_type);
 
-                        let channel_update_msg = FibStateChange {
-                            action: FibChangeAction::ADD,
-                            topic_gdp_name: topic_gdp_name,
-                            connection_type: connection_type,
-                            forward_destination: Some(local_to_net_tx),
-                            description: Some(format!(
-                                "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
-                                topic_name, topic_type, connection_type
-                            )),
-                        };
-                        let _ = channel_tx.send(channel_update_msg);
-                        info!("remote sender sent channel update message");
+                        // let channel_update_msg = FibStateChange {
+                        //     action: FibChangeAction::ADD,
+                        //     topic_gdp_name: topic_gdp_name,
+                        //     connection_type: connection_type,
+                        //     forward_destination: Some(local_to_net_tx),
+                        //     interface: None,
+                        //     description: Some(format!(
+                        //         "udp stream for topic_name {}, topic_type {}, connection_type {:?}",
+                        //         topic_name, topic_type, connection_type
+                        //     )),
+                        // };
+                        // let _ = channel_tx.send(channel_update_msg);
+                        // info!("remote sender sent channel update message");
 
                     }));
                 }

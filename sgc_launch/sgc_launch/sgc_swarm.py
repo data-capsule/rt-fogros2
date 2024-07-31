@@ -42,7 +42,7 @@ class SGC_Swarm:
         self.instance_identifer = whoami
 
         # default Berkeley's parameters
-        self.signaling_server_address = "ws://3.18.194.127:8000"
+        self.signaling_server_address = "20.172.64.185:8000"
         self.routing_information_base_address = "3.18.194.127:8002"
         # self.redis_conn = redis.Redis(host= self.routing_information_base_address.split(":")[0], port=int(self.routing_information_base_address.split(":")[1]), db=0)
         # self.redis_pubsub = self.redis_conn.pubsub()

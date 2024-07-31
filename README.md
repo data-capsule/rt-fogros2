@@ -90,7 +90,7 @@ The parameters such as user ID and group are used to make sure the built targets
 
 ### Run Hello World Example 
 ```
-RUSTFLAGS="--cfg tokio_unstable" RUST_LOG=info cargo run 
+RUST_LOG=info cargo run 
 ```
 On each terminal, run 
 ```
