@@ -1,0 +1,4 @@
+sensor_msgs/CompressedImage image
+---
+shared_srvs/YoloDetection[] detections
+string server_name

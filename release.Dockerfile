@@ -1,5 +1,6 @@
 # first build an image with rust, ros and cargo chef
-FROM osrf/ros:humble-desktop AS chef
+FROM ros:humble AS chef
+
 
 RUN sudo apt update && sudo apt install -y build-essential curl pkg-config libssl-dev protobuf-compiler clang python3-pip ros-humble-rmw-cyclonedds-cpp
 RUN pip install requests
