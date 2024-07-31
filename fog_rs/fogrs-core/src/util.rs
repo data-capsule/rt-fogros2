@@ -12,7 +12,7 @@ pub fn get_signaling_server_address() -> String {
         Some(address) => address.into_string().unwrap(),
         None => {
             info!("Using default signaling server address");
-            "ws://3.18.194.127:8000".to_owned()
+            "20.172.64.185:8000".to_owned()
         }
     }
 }

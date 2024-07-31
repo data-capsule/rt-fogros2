@@ -1,4 +1,5 @@
 use crate::network::udp::get_socket_stun;
+use crate::util::get_signaling_server_address;
 use core::panic;
 use fogrs_common::fib_structs::CandidateStruct;
 use fogrs_common::fib_structs::RoutingManagerRequest;
@@ -303,7 +304,7 @@ pub async fn register_stream_sender(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
-    let mut signaling_stream = TcpStream::connect("20.172.64.185:8080")
+    let mut signaling_stream = TcpStream::connect(get_signaling_server_address().as_str())
         .await
         .expect("Cannot connect to signaling server. Is it started?");
 
@@ -393,7 +394,7 @@ pub async fn register_stream_sender(
         .unwrap();
     // signaling_stream.flush().await.unwrap();
 
-    let mut publish_stream = TcpStream::connect("20.172.64.185:8080").await.unwrap();
+    let mut publish_stream = TcpStream::connect(get_signaling_server_address().as_str()).await.unwrap();
     let request = Message {
         command: "PUBLISH".to_string(),
         topic: format!("{}-{:}", topic_gdp_name, &direction),
@@ -481,7 +482,7 @@ pub async fn register_stream_receiver(
     topic_gdp_name: GDPName, direction: String, fib_tx: UnboundedSender<GDPPacket>,
     channel_tx: UnboundedSender<FibStateChange>, interface: &str, config: fogrs_kcp::KcpConfig,
 ) {
-    let mut signaling_stream = TcpStream::connect("20.172.64.185:8080")
+    let mut signaling_stream = TcpStream::connect(get_signaling_server_address().as_str())
         .await
         .expect("Cannot connect to signaling server. Is it started?");
 
@@ -586,7 +587,7 @@ pub async fn register_stream_receiver(
         .unwrap();
     // signaling_stream.flush().await.unwrap();
 
-    let mut publish_stream = TcpStream::connect("20.172.64.185:8080").await.unwrap();
+    let mut publish_stream = TcpStream::connect(get_signaling_server_address().as_str()).await.unwrap();
     let request = Message {
         command: "PUBLISH".to_string(),
         topic: format!("{}-{:}", topic_gdp_name, &direction),
