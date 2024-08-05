@@ -1,9 +1,6 @@
 identifiers: 
   task: test_cert 
 
-addresses:
-  signaling_server_address: '3.18.194.127:8000'
-
 services:
   - service_name: /yolo
     service_type: shared_srvs/srv/Yolo

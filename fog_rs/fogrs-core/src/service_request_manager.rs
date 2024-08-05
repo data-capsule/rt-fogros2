@@ -118,6 +118,7 @@ pub async fn service_connection_fib_handler(
                         info!("received GDP request {}", pkt);
                         warn!("request: {:?}", pkt.guid);
                         if processed_requests.contains(&pkt.guid) {
+                            logger.log(format!("REQUEST-DUP, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
                             warn!("the request is processed, thrown away");
                             continue;
                         }else{
@@ -133,7 +134,7 @@ pub async fn service_connection_fib_handler(
                                         
                                         let _ = dst.tx.send(pkt.clone());
                                         println!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source);
-                                        logger.log(format!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source));
+                                        logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
 
                                         // let description = dst.description.clone().unwrap();
                                         // let description_parts: Vec<&str> = description.split(" ").collect();
