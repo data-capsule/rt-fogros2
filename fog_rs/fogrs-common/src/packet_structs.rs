@@ -118,6 +118,7 @@ pub struct GDPPacket {
     pub name_record: Option<GDPNameRecord>,
     pub guid: Option<GDPName>,
     pub source: GDPName,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Copy)]
@@ -298,6 +299,7 @@ pub fn construct_gdp_forward_from_bytes_with_guid(
         source: source,
         guid: Some(guid),
         name_record: None,
+        description: None,
     }
 }
 
@@ -311,6 +313,7 @@ pub fn construct_gdp_request_with_guid(
         source: source,
         guid: Some(guid),
         name_record: None,
+        description: None,
     }
 }
 
@@ -324,11 +327,13 @@ pub fn construct_gdp_response_with_guid(
         source: source,
         guid: Some(guid),
         name_record: None,
+        description: None,
     }
 }
 
 pub fn construct_gdp_packet_with_guid(
     action: GdpAction, destination: GDPName, source: GDPName, buffer: Vec<u8>, guid: GDPName,
+    description: Option<String>,
 ) -> GDPPacket {
     GDPPacket {
         action: action,
@@ -337,6 +342,7 @@ pub fn construct_gdp_packet_with_guid(
         source: source,
         guid: Some(guid),
         name_record: None,
+        description: description,
     }
 }
 
@@ -352,6 +358,7 @@ pub fn construct_gdp_advertisement_from_structs(
         payload: None,
         guid: None,
         name_record: Some(name_record),
+        description: None,
     }
 }
 
@@ -366,6 +373,7 @@ pub fn construct_gdp_advertisement_from_bytes(
             payload: None,
             guid: None,
             name_record: None,
+            description: None,
         };
     }
     GDPPacket {
@@ -380,6 +388,7 @@ pub fn construct_gdp_advertisement_from_bytes(
             .unwrap(),
         ),
         guid: None,
+        description: None,
     }
 }
 
@@ -394,5 +403,6 @@ pub fn construct_rib_query_from_bytes(
         payload: None,
         guid: None,
         name_record: Some(name_record),
+        description: None,
     }
 }

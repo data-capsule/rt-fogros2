@@ -120,6 +120,8 @@ pub struct FibConnection {
     pub connection_type: FibConnectionType,
     pub tx: UnboundedSender<GDPPacket>,
     pub description: Option<String>,
+    pub interface: Option<String>,
+    pub address: Option<String>,
 }
 
 #[derive(Debug)]

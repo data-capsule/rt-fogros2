@@ -103,6 +103,7 @@ export RUST_LOG=info && export ROS_DOMAIN_ID=2 && source install/setup.bash && r
 
 
 ```
+export RUST_LOG=info && export ROS_DOMAIN_ID=4 && source install/setup.bash && ros2 launch bench add.three.ints.service.launch.py
 export RUST_LOG=info && export ROS_DOMAIN_ID=3 && source install/setup.bash && ros2 launch bench add.three.ints.service.launch.py
 export RUST_LOG=info && export ROS_DOMAIN_ID=2 && source install/setup.bash && ros2 launch bench add.three.ints.client.launch.py
 ```

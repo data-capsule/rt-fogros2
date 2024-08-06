@@ -157,7 +157,7 @@ pub async fn reader_and_writer(
 
                     info!("the total received payload with size {:} with gdp header length {}",  payload.len(), header.length);
 
-                    let packet = construct_gdp_packet_with_guid(deserialized.action, deserialized.destination, deserialized.source, payload, deserialized.guid);
+                    let packet = construct_gdp_packet_with_guid(deserialized.action, deserialized.destination, deserialized.source, payload, deserialized.guid, description.clone());
                         match ros_tx.send(packet) {
                             Ok(_) => {},
                             Err(_) => {warn!("request is being handled by another connection");},

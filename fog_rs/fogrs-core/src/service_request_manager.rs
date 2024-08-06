@@ -132,9 +132,28 @@ pub async fn service_connection_fib_handler(
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUESTRECEIVER {
                                         
-                                        let _ = dst.tx.send(pkt.clone());
-                                        println!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source);
-                                        logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
+                                        let interface = format!("{}-{}", dst.interface.clone().unwrap(), dst.address.clone().unwrap());
+                                        if sent_requests_by_interface.contains_key(&pkt.guid.unwrap()) {
+                                            let requests = sent_requests_by_interface.get_mut(&pkt.guid.unwrap()).unwrap();
+                                            if !requests.contains(&interface) {
+                                                requests.push(interface.clone());
+                                                let _ = dst.tx.send(pkt.clone());
+                                                println!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, interface.clone());
+                                                logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
+                                            }else{
+                                                warn!("the request is already sent to interface {}, thrown away", interface);
+                                                continue;
+                                            }
+                                        }else{
+                                            sent_requests_by_interface.insert(pkt.guid.unwrap(), vec!(interface.clone()));
+                                            let _ = dst.tx.send(pkt.clone());
+                                            println!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, interface.clone());
+                                            logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
+                                        }
+                                            
+                                        // let _ = dst.tx.send(pkt.clone());
+                                        // println!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source);
+                                        // logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
 
                                         // let description = dst.description.clone().unwrap();
                                         // let description_parts: Vec<&str> = description.split(" ").collect();
@@ -184,11 +203,13 @@ pub async fn service_connection_fib_handler(
                         let processing_time = SystemTime::now().duration_since(request_latency_table.get(&pkt.gdpname).unwrap().clone()).unwrap();
                         
                         if processed_requests.contains(&pkt.guid) {
-                            logger.log(format!("RESPONSE-DUP, {:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
+                            println!("RESPONSE-DUP, {:?}, {:?}, {}, {:?}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros(), pkt.description);
+                            logger.log(format!("RESPONSE-DUP, {:?}, {:?}, {}, {:?}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros(), pkt.description));
                             warn!("the request is processed, thrown away");
                             continue;
                         }else{
-                            logger.log(format!("RESPONSE, {:?}, {:?}, {}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros()));
+                            println!("RESPONSE, {:?}, {:?}, {}, {:?}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros(), pkt.description);
+                            logger.log(format!("RESPONSE, {:?}, {:?}, {}, {:?}", pkt.guid.unwrap(), pkt.source,  processing_time.as_micros(), pkt.description));
                             processed_requests.insert(pkt.guid);
                             let topic_state = rib_state_table.get(&pkt.gdpname);
                             info!("the current topic state is {:?}", topic_state);
@@ -250,6 +271,8 @@ pub async fn service_connection_fib_handler(
                                             connection_type: update.connection_type,
                                             tx: update.forward_destination.unwrap(),
                                             description: update.description,
+                                            interface: update.interface,
+                                            address: update.address,
                                         });
                     
                                 }
@@ -261,6 +284,8 @@ pub async fn service_connection_fib_handler(
                                             connection_type: update.connection_type,
                                             tx: update.forward_destination.unwrap(),
                                             description: update.description,
+                                            interface: update.interface,
+                                            address: update.address,
                                         }),
                                     };
                                     rib_state_table.insert(
