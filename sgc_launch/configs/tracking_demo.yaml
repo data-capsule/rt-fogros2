@@ -1,0 +1,138 @@
+
+identifiers: 
+  task: test_cert 
+
+topics:
+  - topic_name: /yolo/dgb_kp_markers
+    topic_type: visualization_msgs/msg/MarkerArray
+    qos: fast 
+  - topic_name: /goal_pose
+    topic_type: geometry_msgs/msg/PoseStamped
+    qos: fast
+  - topic_name: /yolo/dbg_image
+    topic_type: sensor_msgs/msg/Image
+    qos: fast
+  - topic_name: /yolo/debug_node/transition_event
+    topic_type: lifecycle_msgs/msg/TransitionEvent
+    qos: fast
+  - topic_name: /camera/camera/color/metadata
+    topic_type: realsense2_camera_msgs/msg/Metadata
+    qos: fast
+  - topic_name: /camera/camera/aligned_depth_to_color/camera_info
+    topic_type: sensor_msgs/msg/CameraInfo
+    qos: fast
+  - topic_name: /yolo/tracking
+    topic_type: yolov8_msgs/msg/DetectionArray
+    qos: fast
+  - topic_name: /camera/camera/extrinsics/depth_to_color
+    topic_type: realsense2_camera_msgs/msg/Extrinsics
+    qos: fast
+  - topic_name: /camera/camera/depth/image_rect_raw/compressed
+    topic_type: sensor_msgs/msg/CompressedImage
+    qos: fast
+  - topic_name: /parameter_events
+    topic_type: rcl_interfaces/msg/ParameterEvent
+    qos: fast
+  - topic_name: /camera/camera/aligned_depth_to_color/image_raw
+    topic_type: sensor_msgs/msg/Image
+    qos: fast
+  - topic_name: /yolo/detect_3d_node/transition_event
+    topic_type: lifecycle_msgs/msg/TransitionEvent
+    qos: fast
+  - topic_name: /yolo/detections_3d
+    topic_type: yolov8_msgs/msg/DetectionArray
+    qos: fast
+  - topic_name: /yolo/tracking_node/transition_event
+    topic_type: lifecycle_msgs/msg/TransitionEvent
+    qos: fast
+  - topic_name: /rosout
+    topic_type: rcl_interfaces/msg/Log
+    qos: fast
+  - topic_name: /camera/camera/depth/metadata
+    topic_type: realsense2_camera_msgs/msg/Metadata
+    qos: fast
+  - topic_name: /camera/camera/aligned_depth_to_color/image_raw/compressedDepth
+    topic_type: sensor_msgs/msg/CompressedImage
+    qos: fast
+  - topic_name: /tf_static
+    topic_type: tf2_msgs/msg/TFMessage
+    qos: fast
+  - topic_name: /camera/camera/depth/camera_info
+    topic_type: sensor_msgs/msg/CameraInfo
+    qos: fast
+  - topic_name: /yolo/dgb_bb_markers
+    topic_type: visualization_msgs/msg/MarkerArray
+    qos: fast
+  - topic_name: /camera/camera/depth/image_rect_raw
+    topic_type: sensor_msgs/msg/Image
+    qos: fast
+  - topic_name: /clicked_point
+    topic_type: geometry_msgs/msg/PointStamped
+    qos: fast
+  - topic_name: /camera/camera/depth/color/points
+    topic_type: sensor_msgs/msg/PointCloud2
+    qos: fast
+  - topic_name: /yolo/yolov8_node/transition_event
+    topic_type: lifecycle_msgs/msg/TransitionEvent
+    qos: fast
+  - topic_name: /camera/camera/depth/image_rect_raw/compressedDepth
+    topic_type: sensor_msgs/msg/CompressedImage
+    qos: fast
+  - topic_name: /camera/camera/aligned_depth_to_color/image_raw/theora
+    topic_type: theora_image_transport/msg/Packet
+    qos: fast
+  - topic_name: /camera/camera/color/camera_info
+    topic_type: sensor_msgs/msg/CameraInfo
+    qos: fast
+  - topic_name: /events/write_split
+    topic_type: rosbag2_interfaces/msg/WriteSplitEvent
+    qos: fast
+  - topic_name: /camera/camera/color/image_raw
+    topic_type: sensor_msgs/msg/Image
+    qos: fast
+  - topic_name: /camera/camera/aligned_depth_to_color/image_raw/compressed
+    topic_type: sensor_msgs/msg/CompressedImage
+    qos: fast
+  - topic_name: /camera/camera/color/image_raw/compressed
+    topic_type: sensor_msgs/msg/CompressedImage
+    qos: fast
+  - topic_name: /initialpose
+    topic_type: geometry_msgs/msg/PoseWithCovarianceStamped
+    qos: fast
+  - topic_name: /camera/camera/color/image_raw/theora
+    topic_type: theora_image_transport/msg/Packet
+    qos: fast
+  - topic_name: /yolo/detections
+    topic_type: yolov8_msgs/msg/DetectionArray
+    qos: fast
+  - topic_name: /camera/camera/depth/image_rect_raw/theora
+    topic_type: theora_image_transport/msg/Packet
+    qos: fast
+  - topic_name: /camera/camera/color/image_raw/compressedDepth
+    topic_type: sensor_msgs/msg/CompressedImage
+    qos: fast
+
+
+state_machine: 
+  robot:
+    topics:
+      - /goal_pose: pub
+      - /yolo/detections: sub
+      - /camera/camera/depth/image_rect_raw: sub
+      - /tf_static: pub
+  cloud:
+    topics:
+      - /goal_pose: sub
+      - /yolo/detections: pub
+      - /camera/camera/depth/image_rect_raw: pub
+      - /tf_static: sub
+
+
+assignment:
+  robot: robot
+  cloud: cloud
+
+topology:
+  robot:
+    children: 
+      - cloud

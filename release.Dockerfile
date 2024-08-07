@@ -7,6 +7,11 @@ RUN pip install requests
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+# install realsense dependency
+RUN apt install -y ros-humble-librealsense2* ros-humble-realsense2-*
+# install rtabmap_sync
+RUN  apt update &&  apt install -y ros-humble-rtabmap-ros
+
 WORKDIR /fog_ws 
 # changed to .
 COPY . /fog_ws/rt-fogros2
