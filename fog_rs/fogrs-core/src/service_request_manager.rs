@@ -11,6 +11,8 @@ use std::time::SystemTime;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
+use default_net;
+
 fn read_binding_table() -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
     // get configuration file path from environment variable
     let config_file_path = std::env::var("SGC_CONFIG_PATH")?;
@@ -127,11 +129,40 @@ pub async fn service_connection_fib_handler(
                         }
                         let topic_state = rib_state_table.get(&pkt.gdpname);
                         info!("the current topic state is {:?}", topic_state);
+                        let default_network_interface:String = match default_net::get_default_interface() {
+                            Ok(default_interface) => {
+                                default_interface.name
+                            },
+                            Err(e) => {
+                                println!("{}", e);
+                                continue;
+                            },
+                        };
                         match topic_state {
                             Some(s) => {
                                 for dst in &s.receivers {
                                     if dst.state == TopicStateInFIB::RUNNING && dst.connection_type == FibConnectionType::REQUESTRECEIVER {
+
+                                        if dst.interface.clone().unwrap() == "ros".to_string() {
+                                            let _ = dst.tx.send(pkt.clone());
+                                            println!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst.interface.clone().unwrap());
+                                            logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
+                                            continue;
+                                        }
+
+                                        else if dst.interface.clone().unwrap() == default_network_interface {
+                                            let _ = dst.tx.send(pkt.clone());
+                                            println!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst.interface.clone().unwrap());
+                                            logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
+                                            continue;
+                                        }
+
+                                        else {
+                                            println!("the request to {:?} is not sent to the default interface {}, thrown away", dst.interface.clone(), default_network_interface);
+                                            continue;
+                                        }
                                         
+
                                         let interface = format!("{}-{}", dst.interface.clone().unwrap(), dst.address.clone().unwrap());
                                         if sent_requests_by_interface.contains_key(&pkt.guid.unwrap()) {
                                             let requests = sent_requests_by_interface.get_mut(&pkt.guid.unwrap()).unwrap();
@@ -150,6 +181,8 @@ pub async fn service_connection_fib_handler(
                                             println!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, interface.clone());
                                             logger.log(format!("REQUEST, {:?}, {:?}, {:?}", pkt.guid.unwrap(), pkt.source, dst));
                                         }
+
+                                        
                                             
                                         // let _ = dst.tx.send(pkt.clone());
                                         // println!("REQUEST, {:?}, {:?}", pkt.guid.unwrap(), pkt.source);
