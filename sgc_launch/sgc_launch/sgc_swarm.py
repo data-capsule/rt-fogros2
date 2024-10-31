@@ -3,6 +3,7 @@ import yaml
 import pprint
 import random
 
+
 class Node:
     def __init__(self, address, parent=None):
         self.address = address
@@ -41,7 +42,7 @@ class SGC_Swarm:
         self.instance_identifer = whoami
 
         # default Berkeley's parameters
-        self.signaling_server_address = "ws://3.18.194.127:8000"
+        self.signaling_server_address = "20.172.64.185:8000"
         self.routing_information_base_address = "3.18.194.127:8002"
         # self.redis_conn = redis.Redis(host= self.routing_information_base_address.split(":")[0], port=int(self.routing_information_base_address.split(":")[1]), db=0)
         # self.redis_pubsub = self.redis_conn.pubsub()
@@ -56,7 +57,9 @@ class SGC_Swarm:
 
         # topic dictionary: map topic to topic type
         self.topic_dict = dict()
+        self.topic_qos_dict = dict()
         self.service_dict = dict()
+        self.service_qos_dict = dict()
 
         # states: map state_name to SGC_StateMachine
         self.state_dict = dict()
@@ -82,7 +85,6 @@ class SGC_Swarm:
         self._load_identifiers(config)
         self._load_services(config)
         self._load_topics(config)
-        print_tree(self.build_tree(config["topology"]))
         self._load_state_machine(config)
 
     """
@@ -159,7 +161,6 @@ class SGC_Swarm:
                             self.construct_tree_by_sending_request_topic(
                                 self.build_tree(self.config["topology"]),
                                 topic_name,
-                                topic_type,
                                 topic_action,
                             )
 
@@ -200,7 +201,6 @@ class SGC_Swarm:
                             self.construct_tree_by_sending_request_service(
                                 self.build_tree(self.config["topology"]),
                                 service_name,
-                                service_type,
                             )
 
                 self.assignment_dict[machine] = new_assignment_dict[machine]
@@ -248,10 +248,20 @@ class SGC_Swarm:
             return
         for topic in config["topics"]:
             self.topic_dict[topic["topic_name"]] = topic["topic_type"]
+            if "qos" in topic:
+                self.topic_qos_dict[topic["topic_name"]] = topic["qos"]
+            else:
+                self.topic_qos_dict[topic["topic_name"]] = "default"
 
     def _load_services(self, config):
+        if "services" not in config:
+            return
         for service in config["services"]:
             self.service_dict[service["service_name"]] = service["service_type"]
+            if "qos" in service:
+                self.service_qos_dict[service["service_name"]] = service["qos"]
+            else:
+                self.service_qos_dict[service["service_name"]] = "default"
 
     def _load_state_machine(self, config):
         for state_name in config["state_machine"]:
@@ -292,7 +302,7 @@ class SGC_Swarm:
             self.assignment_dict[identity_name] = state_name
         return self.assignment_dict
 
-    def construct_tree_by_sending_request_service(self, node, topic_name, topic_type):
+    def construct_tree_by_sending_request_service(self, node, topic_name):
         for child in node.children:
             # uniquely identify the session
             session_id = node.address + child.address
@@ -302,7 +312,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    topic_type,
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "source",
                     "request" + node.address + session_id,
                     "request" + child.address + session_id,
@@ -312,7 +323,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    topic_type,
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "destination",
                     "response" + child.address + session_id,
                     "response" + node.address + session_id,
@@ -324,7 +336,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    topic_type,
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "destination",
                     "request" + node.address + session_id,
                     "request" + child.address + session_id,
@@ -334,7 +347,8 @@ class SGC_Swarm:
                 self.send_routing_request_service(
                     self.sgc_address,
                     topic_name,
-                    topic_type,
+                    self.service_dict[topic_name],
+                    self.service_qos_dict[topic_name],
                     "source",
                     "response" + child.address + session_id,
                     "response" + node.address + session_id,
@@ -342,11 +356,11 @@ class SGC_Swarm:
                 )
 
             self.construct_tree_by_sending_request_service(
-                child, topic_name, topic_type
+                child, topic_name
             )
 
     def construct_tree_by_sending_request_topic(
-        self, node, topic_name, topic_type, topic_action
+        self, node, topic_name, topic_action
     ):
         def reverse_pub_sub(topic_action):
             if topic_action == "pub":
@@ -363,11 +377,15 @@ class SGC_Swarm:
             session_id = node.address + child.address
 
             if node.address == self.instance_identifer:
+                self.logger.info(
+                    f"topic_action {topic_action} reverse {reverse_pub_sub(topic_action)}"
+                )
                 # establish request channel from node to child
                 self.send_routing_request_topic(
                     self.sgc_address,
                     topic_name,
-                    topic_type,
+                    self.topic_dict[topic_name],
+                    self.topic_qos_dict[topic_name],
                     topic_action,
                     "topic" + node.address + session_id,
                     "topic" + child.address + session_id,
@@ -377,28 +395,18 @@ class SGC_Swarm:
                 self.send_routing_request_topic(
                     self.sgc_address,
                     topic_name,
-                    topic_type,
-                    (
-                        topic_action
-                    ),  # because child is the destination, we need to reverse the pub/sub
+                    self.topic_dict[topic_name],
+                    self.topic_qos_dict[topic_name],
+                    topic_action,  # because child is the destination, we need to reverse the pub/sub
                     "topic" + node.address + session_id,
                     "topic" + child.address + session_id,
                     topic_action,  # "pub"
                 )
 
             self.construct_tree_by_sending_request_topic(
-                child, topic_name, topic_type, topic_action
+                child, topic_name, topic_action
             )
 
-    # def build_mcast_tree(self, node_dict, parent=None):
-    #     address = node_dict.get("address")
-    #     node = Node(address, parent)
-
-    #     for child_dict in node_dict.get("children", []):
-    #         child_node = self.build_mcast_tree(child_dict, node)
-    #         node.children.append(child_node)
-
-    #     return node
 
     def build_tree(self, node_dict, parent=None):
         if isinstance(node_dict, str):
@@ -419,6 +427,7 @@ class SGC_Swarm:
         addr,
         topic_name,
         topic_type,
+        topic_qos,
         source_or_destination,
         sender_url_str,
         receiver_url_str,
@@ -441,12 +450,13 @@ class SGC_Swarm:
             addr,
             topic_name,
             topic_type,
+            topic_qos,
             source_or_destination,
             sender_url,
             receiver_url,
             connection_type,
         ):
-            sleep(random.randint(1, 10) * 0.5) # TODO: a hack to prevent sending at the same time 
+            # sleep(random.randint(1, 10) * 0.5) # TODO: a hack to prevent sending at the same time 
             self.logger.info(
                 f"send routing request service {[addr, topic_name, topic_type, source_or_destination, sender_url, receiver_url, connection_type]}"
             )
@@ -456,6 +466,7 @@ class SGC_Swarm:
                 "crypto": "test_cert",
                 "topic_name": topic_name,
                 "topic_type": topic_type,
+                "topic_qos": topic_qos,
                 "connection_type": connection_type,
                 "forward_sender_url": sender_url,
                 "forward_receiver_url": receiver_url,
@@ -471,6 +482,7 @@ class SGC_Swarm:
                 addr,
                 topic_name,
                 topic_type,
+                topic_qos,
                 source_or_destination,
                 sender_url,
                 receiver_url,
@@ -482,6 +494,7 @@ class SGC_Swarm:
                 addr,
                 topic_name,
                 topic_type,
+                topic_qos,
                 source_or_destination,
                 sender_url,
                 receiver_url,
@@ -493,6 +506,7 @@ class SGC_Swarm:
         addr,
         topic_name,
         topic_type,
+        topic_qos,
         source_or_destination,
         sender_url_str,
         receiver_url_str,
@@ -513,19 +527,21 @@ class SGC_Swarm:
             addr,
             topic_name,
             topic_type,
+            topic_qos,
             source_or_destination,
             sender_url,
             receiver_url,
             connection_type,
         ):
-            sleep(1)
+            sleep(0.1)
             ros_topic = {
                 "api_op": "routing",
                 "ros_op": source_or_destination,
                 "crypto": "test_cert",
                 "topic_name": topic_name,
                 "topic_type": topic_type,
-                "connection_type": connection_type,
+                "topic_qos": topic_qos,
+                "connection_type": "pubsub",
                 "forward_sender_url": sender_url,
                 "forward_receiver_url": receiver_url,
             }
@@ -539,6 +555,7 @@ class SGC_Swarm:
             addr,
             topic_name,
             topic_type,
+            topic_qos,
             source_or_destination,
             sender_url,
             receiver_url,

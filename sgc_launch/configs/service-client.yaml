@@ -4,6 +4,7 @@ identifiers:
 services:
   - service_name: /add_three_ints # STEP1: your service name
     service_type: bench_msgs/srv/AddThreeInts # STEP2: your service type
+    qos: normal
 
 state_machine: 
   standby: 
@@ -17,10 +18,8 @@ state_machine:
 assignment:
   machine_client: client
   machine_server: server
-  machine_switch: standby
 
 topology:
   machine_client:
     children: 
       - machine_server
-      - machine_switch

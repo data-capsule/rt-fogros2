@@ -1,9 +1,8 @@
-
 import subprocess, os, yaml
 import requests
 import pprint
-import socket 
-import time 
+import socket
+import time
 import rclpy
 import rclpy.node
 from sgc_msgs.msg import Profile
@@ -11,17 +10,17 @@ from sgc_msgs.srv import SgcAssignment
 from .utils import *
 import psutil
 import matplotlib.pyplot as plt
-import pandas as pd 
+import pandas as pd
 import seaborn as sns
-import numpy as np 
+import numpy as np
 from rcl_interfaces.msg import SetParametersResult
 from sgc_msgs.msg import Latency
 from std_msgs.msg import Float64
 
+
 class HeuristicPubSub(rclpy.node.Node):
     def __init__(self):
-        super().__init__('heuristic_pubsub')
-
+        super().__init__("heuristic_pubsub")
 
         self.declare_parameter("whoami", "")
         self.identity = self.get_parameter("whoami").value
@@ -42,18 +41,20 @@ class HeuristicPubSub(rclpy.node.Node):
             get_ROS_class(request_topic_type),
             request_topic,
             self.request_topic_callback,
-            1)
+            1,
+        )
 
         self.response_topic = self.create_subscription(
             get_ROS_class(response_topic_type),
             response_topic,
             self.response_topic_callback,
-            1)
-        
-        self.latency_publisher = self.create_publisher(Latency, 'fogros_sgc/latency', 10)
+            1,
+        )
 
+        self.latency_publisher = self.create_publisher(
+            Latency, "fogros_sgc/latency", 10
+        )
 
-    
     def request_topic_callback(self, msg):
         self.last_request_time = time.time()
         self.logger.info(f"request: {self.last_request_time}")
@@ -61,15 +62,19 @@ class HeuristicPubSub(rclpy.node.Node):
     # calculate latency based on heuristics
     def response_topic_callback(self, msg):
         latency = Latency()
-        latency.latency = (time.time() - self.last_request_time)
+        latency.latency = time.time() - self.last_request_time
         latency.identity = self.identity
         self.latency_publisher.publish(latency)
-        self.logger.info(f"response: {time.time()}, {(time.time() - self.last_request_time)}")
+        self.logger.info(
+            f"response: {time.time()}, {(time.time() - self.last_request_time)}"
+        )
+
 
 def main():
     rclpy.init()
     node = HeuristicPubSub()
     rclpy.spin(node)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

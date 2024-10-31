@@ -1,4 +1,4 @@
-target
+./fog_rs/target
 Dockerfile
 .dockerignore
 .git

@@ -1,0 +1,79 @@
+[package]
+name = "gdp-router"
+version = "0.0.1-beta"
+authors = ["Eric Chen <kych@berkeley.edu>", "Jiachen Yuan <jcyuan_johnson@berkeley.edu>"]
+edition = "2021"
+repository = "https://github.com/data-capsule/gdp-router"
+readme = "README.md"
+license = "Apache 2.0"
+keywords = ["router", "security"]
+description = """
+GDP Router
+"""
+
+[workspace]
+members = [
+    "fogrs-utils",
+    "fogrs-core",
+    "fogrs-signaling",
+    "fogrs-ros",
+    "fogrs-common",
+    "fogrs-kcp",
+]
+
+[features]
+nightly = ["fogrs-utils/nightly"]
+termlog = ["fogrs-utils/termlog"]
+journald = ["fogrs-utils/journald"]
+syslog = ["fogrs-utils/syslog"]
+
+[dependencies]
+fogrs-utils = { path = "./fogrs-utils"}
+fogrs-core = { path = "./fogrs-core" }
+better-panic = "0.3.0"
+log = { version = "0.4.14", features = ["release_max_level_off"] }
+env_logger = "0.11.3"
+clap_complete = "3.0"
+human-panic = "2.0.0"
+
+[dev-dependencies]
+assert_cmd = "2.0.4"
+predicates = "2.1.1"
+
+
+[dependencies.clap]
+version = "3.0.14"
+features = ["cargo", "derive"]
+
+
+[profile.dev]
+opt-level=0
+debug = true
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 4
+
+[profile.release]
+opt-level=3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+
+[profile.test]
+opt-level = 1
+debug = true
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 4
+
+[profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1

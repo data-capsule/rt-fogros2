@@ -3,17 +3,14 @@
 identifiers: 
   # crypto for the task (same for all robots/services on the same task)
   task: test_cert 
-  # crypto unique for the robot 
-  # note #0 : 
-  # for now, it's not bound to an actual certificate yet, name whatever you want
-  # but make sure to match this with the assignment 
-  # note #1 : this value is overriden by rosparam's whoami
-  # note #2 : feel free to define it here or define it at rosparam
-  # whoami: machine_talker 
-  
+
+addresses:
+  signaling_server_address: '20.172.64.185:8000'
+
 topics:
   - topic_name: /chatter
     topic_type: std_msgs/msg/String
+    qos: fast 
 
 # declare possible states 
 # pub: publish to the swarm
@@ -34,3 +31,12 @@ state_machine:
 assignment:
   machine_talker: talker
   machine_listener: listener
+
+topology:
+  machine_talker:
+    children: 
+      - machine_listener
+
+# bindings:
+#   enp5s0: 128.32.37.36
+#   wlo1: "54.176.160.12"

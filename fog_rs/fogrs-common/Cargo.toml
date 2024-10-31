@@ -1,0 +1,21 @@
+[package]
+name = "fogrs-common"
+version = "0.0.1-beta"
+authors = ["Eric Chen <kych@berkeley.edu>"]
+description = "The application core code"
+edition = "2021"
+
+
+[dependencies]
+rand = "0.8.4"
+log = "0.4.14"
+strum_macros = "0.24.3"
+anyhow = "1.0.66"
+strum = "0.24.1"
+serde = "1.0.149"
+serde_json = "*"
+tokio = { version = "1.22", features = ["full"] }
+# r2r = {path = "/home/gdpmobile8/r2r/r2r"}
+# r2r = {git = "https://github.com/KeplerC/r2r.git", rev = "85f6ab046"}
+sha2 = "0.10.6"
+bytes = "1"
