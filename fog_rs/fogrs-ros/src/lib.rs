@@ -138,7 +138,7 @@ impl ROSManager {
                         let ros_handle = tokio::spawn(async move {
                             info!("ros_topic_remote_publisher ROS handling loop has started!");
                             while let Some(packet) = subscriber.next().await {
-                                info!("received a ROS packet {:?}", packet);
+                                info!("received a ROS packet {:?}", packet.len());
                                 let ros_msg = packet;
                                 let guid = generate_random_gdp_name();
                                 let packet = construct_gdp_forward_from_bytes_with_guid(topic_gdp_name, self.unique_ros_node_gdp_name, ros_msg, guid);
@@ -242,7 +242,7 @@ impl ROSManager {
                                 if pkt_to_forward.action == GdpAction::Forward {
                                     if pkt_to_forward.gdpname == topic_gdp_name {
                                         let payload = pkt_to_forward.get_byte_payload().unwrap();
-                                        info!("new payload {:?} to publish to topic {:?}", payload, topic_name);
+                                        info!("new payload {:?} to publish to topic {:?}", payload.len(), topic_name);
                                         //let ros_msg = serde_json::from_str(str::from_utf8(payload).unwrap()).expect("json parsing failure");
                                         // info!("the decoded payload to publish is {:?}", ros_msg);
                                         publisher.publish(payload.clone()).unwrap();

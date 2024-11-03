@@ -58,6 +58,8 @@ setup(
             "listener_stress = bench.listener_stress:main",
             "talker = bench.talker:main",
             "listener = bench.listener:main",
+            "parking_publisher = bench.parking_publisher:main",
+            "parking_subscriber = bench.parking_subscriber:main",
             "profiler = bench.profiler:main",
         ],
     },

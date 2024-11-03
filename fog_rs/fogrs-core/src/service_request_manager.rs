@@ -112,7 +112,7 @@ pub async fn service_connection_fib_handler(
                                 }
                             },
                             None => {
-                                error!("The gdpname {:?} does not exist", pkt.gdpname)
+                                error!("The packet {:?} does not exist", pkt)
                             }
                         }
                     },
