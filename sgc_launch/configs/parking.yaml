@@ -4,19 +4,19 @@ identifiers:
 topics:
   - topic_name: /parking_stream_0/compressed
     topic_type: sensor_msgs/msg/CompressedImage
-    qos: fast 
+    qos: normal 
   - topic_name: /parking_stream_1/compressed
     topic_type: sensor_msgs/msg/CompressedImage
-    qos: fast 
+    qos: normal 
   - topic_name: /parking_stream_2/compressed
     topic_type: sensor_msgs/msg/CompressedImage
-    qos: fast 
+    qos: normal 
   - topic_name: /parking_stream_3/compressed
     topic_type: sensor_msgs/msg/CompressedImage
-    qos: fast 
+    qos: normal 
   - topic_name: /latency_feedback/compressed
     topic_type: sensor_msgs/msg/CompressedImage
-    qos: fast 
+    qos: normal 
 
 state_machine:
   talker:

@@ -71,7 +71,7 @@ class BenchmarkPublisher(Node):
         if self.current_sample >= self.num_samples:
             # Calculate and log averages
             averages = [sum_lat / self.num_samples for sum_lat in self.latency_sums]
-            total_avg = sum(averages) / len(averages)
+            total_avg = sum(averages)
             
             # Store data for plotting
             current_size = self.message_sizes[self.current_size_index]

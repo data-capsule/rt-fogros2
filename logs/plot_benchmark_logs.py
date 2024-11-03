@@ -18,13 +18,13 @@ def plot_benchmark_logs(log_files, labels=None):
         
         # Plot individual stream latencies
         linestyles = ['-', '--', ':', '-.']
-        for i in range(4):
-            plt.plot(data['message_sizes'], 
-                    data['stream_latencies'][i], 
-                    marker='o',
-                    linestyle=linestyles[i],
-                    label=f'{label} - Stream {i}')
-        
+        # for i in range(4):
+        #     plt.plot(data['message_sizes'], 
+        #             data['stream_latencies'][i], 
+        #             marker='o',
+        #             linestyle=linestyles[i],
+        #             label=f'{label} - Stream {i}')
+        print(data['total_latencies'] * 4)
         # Plot total average
         plt.plot(data['message_sizes'], 
                 data['total_latencies'], 
