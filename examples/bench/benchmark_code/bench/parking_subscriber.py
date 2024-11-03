@@ -28,7 +28,7 @@ class BenchmarkSubscriber(Node):
             10)
             
         # Timer for publishing latency statistics
-        self.timer = self.create_timer(0.1, self.publish_latencies)  # 1Hz
+        self.timer = self.create_timer(0.066, self.publish_latencies)  # 1Hz
         
     def callback(self, msg, stream_id):
         self.get_logger().info(f'Received message from stream {stream_id}')

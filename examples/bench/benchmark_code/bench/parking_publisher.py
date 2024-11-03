@@ -11,9 +11,9 @@ class BenchmarkPublisher(Node):
         super().__init__('benchmark_publisher')
         
         # Benchmark parameters
-        self.message_sizes = [64, 640, 6400, 64000, 640000]  # 64, 640, 6400, 64000, 640000
+        self.message_sizes = [64, 640, 6400, 64000, 640000]  # 64, 640, 6400, 64000, 640000, 6400000
         self.current_size_index = 0
-        self.num_samples = 100
+        self.num_samples = 500
         self.current_sample = 0
         self.latency_sums = [0.0] * 4  # Sum for each stream
         

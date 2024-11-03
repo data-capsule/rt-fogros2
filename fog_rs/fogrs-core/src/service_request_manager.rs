@@ -99,7 +99,7 @@ pub async fn service_connection_fib_handler(
                                         match dst.tx.send(pkt.clone()) {
                                             Ok(_) => {
                                                 // logger.log(format!("FORWARD, {:?}, {:?}", pkt.guid, pkt.source));
-                                                info!("sent to {:?}", dst.description);
+                                                warn!("sent to {:?}", dst.description);
                                             },
                                             Err(e) => {
                                                 // .expect(format!();

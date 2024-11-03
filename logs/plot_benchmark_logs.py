@@ -11,7 +11,7 @@ def plot_benchmark_logs(log_files, labels=None):
     plt.figure(figsize=(12, 6))
     
     if labels is None:
-        labels = [f'Benchmark {i+1}' for i in range(len(log_files))]
+        labels = [f'{log_file.split("/")[-1]}' for log_file in log_files]
     
     for log_file, label in zip(log_files, labels):
         data = load_benchmark_log(log_file)
@@ -24,7 +24,7 @@ def plot_benchmark_logs(log_files, labels=None):
         #             marker='o',
         #             linestyle=linestyles[i],
         #             label=f'{label} - Stream {i}')
-        print(data['total_latencies'] * 4)
+        print(data['total_latencies'])
         # Plot total average
         plt.plot(data['message_sizes'], 
                 data['total_latencies'], 

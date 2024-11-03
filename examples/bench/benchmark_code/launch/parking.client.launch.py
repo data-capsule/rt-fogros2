@@ -29,7 +29,7 @@ def generate_launch_description():
             # or use the `config_file_name` optional parameter
             {"config_file_name": "parking.yaml"}, 
             {"whoami": "machine_talker"},
-            {"release_mode": False}
+            {"release_mode": True}
         ]
     )
     ld.add_action(sgc_router)
