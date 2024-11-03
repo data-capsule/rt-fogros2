@@ -1,6 +1,7 @@
 import json
 import glob
 import matplotlib.pyplot as plt
+import seaborn as sns
 import argparse
 
 def load_benchmark_log(filename):
@@ -8,43 +9,33 @@ def load_benchmark_log(filename):
         return json.load(f)
 
 def plot_benchmark_logs(log_files, labels=None):
-    plt.figure(figsize=(12, 6))
+    # Set the seaborn style
+    sns.set_context("talk")
+    plt.figure(figsize=(10, 6))
     
     if labels is None:
         labels = [f'{log_file.split("/")[-1]}' for log_file in log_files]
     
     for log_file, label in zip(log_files, labels):
         data = load_benchmark_log(log_file)
-        
-        # Plot individual stream latencies
-        linestyles = ['-', '--', ':', '-.']
-        # for i in range(4):
-        #     plt.plot(data['message_sizes'], 
-        #             data['stream_latencies'][i], 
-        #             marker='o',
-        #             linestyle=linestyles[i],
-        #             label=f'{label} - Stream {i}')
         print(data['total_latencies'])
-        # Plot total average
-        plt.plot(data['message_sizes'], 
-                data['total_latencies'], 
-                'k--', 
-                linewidth=2, 
-                label=f'{label} - Total Average')
+        
+        # Plot total average with seaborn
+        sns.lineplot(x=data['message_sizes'], 
+                    y=data['total_latencies'],
+                    label=f'{label.strip(".json")}',
+                    marker='o')
     
     plt.xscale('log')
     plt.yscale('log')
     plt.xlabel('Message Size (bytes)')
     plt.ylabel('Latency (ms)')
-    plt.title('Benchmark Results: Latency vs Message Size')
-    plt.grid(True)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    # plt.title('Benchmark Results: Latency vs Message Size')
     
-    # Adjust layout to prevent legend cutoff
+    # Adjust layout and save
     plt.tight_layout()
-    
-    # Save the plot
-    plt.savefig('benchmark_comparison.png', bbox_inches='tight')
+    plt.grid(True)
+    plt.savefig('benchmark_comparison.png', bbox_inches='tight', dpi=300)
     print('Plot saved as benchmark_comparison.png')
 
 def main():
