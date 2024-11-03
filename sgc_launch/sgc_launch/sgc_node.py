@@ -199,7 +199,7 @@ class SGC_Router_Node(rclpy.node.Node):
                 f"using signaling server address {self.swarm.signaling_server_address}, routing information base address {self.swarm.routing_information_base_address}"
             )
         else:
-            current_env["SGC_SIGNAL_SERVER_ADDRESS"] = "20.172.64.185:8000"
+            current_env["SGC_SIGNAL_SERVER_ADDRESS"] = "127.0.0.1:8000"
             self.logger.info(
                 f"using default signaling server address {current_env['SGC_SIGNAL_SERVER_ADDRESS']}, routing information base address {current_env['SGC_RIB_SERVER_ADDRESS']}"
             )
