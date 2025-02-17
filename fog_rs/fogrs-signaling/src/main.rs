@@ -8,5 +8,5 @@ async fn main() {
     env_logger::builder().format_timestamp_micros().init();
     // console_subscriber::init();
     let server = Arc::new(Server::new());
-    server.run("0.0.0.0:50005").await;
+    server.run("0.0.0.0:8000").await;
 }
