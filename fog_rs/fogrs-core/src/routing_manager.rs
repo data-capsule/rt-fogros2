@@ -76,17 +76,19 @@ fn get_ip_address(interface_name: &str) -> Option<SocketAddr> {
 }
 
 fn gather_candidate_interfaces() -> Vec<String> {
-    // let interfaces = datalink::interfaces();
-    // let mut candidate_interfaces = vec![];
-    // for interface in interfaces {
-    //     // return interface name
-    //     candidate_interfaces.push(interface.name);
-    // }
+    let interfaces = datalink::interfaces();
+    let mut candidate_interfaces = vec![];
+    for interface in interfaces {
+        // return interface name
+        candidate_interfaces.push(interface.name);
+    }
+    info!("candidate_interfaces {:?}", candidate_interfaces);
+    candidate_interfaces
     // candidate_interfaces
 
     // get default interface
-    let default_interface = "enp5s0";
-    vec![default_interface.to_string()]
+    // let default_interface = "enp5s0";
+    // vec![default_interface.to_string()]
 }
 
 async fn send_ping_from_interface(
